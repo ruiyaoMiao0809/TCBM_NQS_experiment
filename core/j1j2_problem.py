@@ -187,6 +187,21 @@ def _log_2cosh_complex(z: torch.Tensor) -> torch.Tensor:
     cosh is zero there). No epsilon clamp is added — clamps inject zero
     gradients into the backward pass, which would silently corrupt training.
 
+    Phase branch note
+    -----------------
+    The phase output uses atan2 with branch cut at v = ±π, which is the
+    standard principal value convention. When v ≈ π·k (integer k), float32
+    rounding of math.pi causes sin(v) to evaluate as a tiny number with
+    sign that depends on how the input was constructed. atan2 then returns
+    ±π. This is mathematically correct (±π are equivalent mod 2π) but
+    produces a piecewise-discontinuous gradient near these branch
+    boundaries.
+    For NQS training in the POC scope (init_scale=0.01, 3000 steps),
+    hidden activation imag parts stay close to 0 and never approach π.
+    If extending to longer training where this could become an issue,
+    consider unwrapping the phase before atan2, or using log(complex_value)
+    directly with PyTorch's unwrapped complex log.
+
     Autograd notes
     --------------
     abs(u) has zero subgradient at u=0 in PyTorch. Through the chain rule
@@ -348,29 +363,46 @@ class J1J2Problem:
 
         Returns
         -------
-        cost : (B,) energies
+        cost : (B,) energies — autograd-tracked through θ for gradient()
         penalty : (B,) zeros
-        cost_std : (B,) statistical errors, or None if exact
+        cost_std : (B,) statistical errors (detached; not used for backward)
+
+        Autograd contract
+        -----------------
+        evaluate() returns autograd-tracked tensors so that gradient() can
+        call .backward() on (cost + penalty).sum(). The gradient computed
+        this way is a "partial gradient" — it differentiates only the
+        fixed-sample path, missing the score-function term
+        ∂_θ log P(σ) · E_loc that comes from re-sampling under |ψ|².
+        Bukov 2021 / NetKet use the full log-derivative estimator for
+        unbiased gradients; we adopt that in Week 2 (see TODO at gradient()).
+        For Week 1 baselines, partial gradient is sufficient per Protocol v2.1.
+
+        Implementation note: per-batch outputs are collected into a list and
+        torch.stack'd at the end, rather than written via in-place index
+        assignment to a torch.zeros buffer. In-place assignment to a
+        non-grad-tracking buffer would silently break the autograd graph.
         """
         B = x.shape[0]
         ns = n_samples if n_samples is not None else 2000
 
-        cost = torch.zeros(B, dtype=self.real_dtype, device=self.device)
-        cost_std = torch.zeros(B, dtype=self.real_dtype, device=self.device)
+        costs = []
+        stds = []
 
         for b in range(B):
             theta_b = x[b]
             if self.N <= 12 and ns <= 0:
                 # Exact (full Hilbert space enumeration) — use for small tests only
                 e_val = self._evaluate_exact(theta_b)
-                cost[b] = e_val
-                cost_std[b] = 0.0
+                e_std = torch.zeros((), dtype=self.real_dtype, device=self.device)
             else:
                 # Stochastic VMC estimate
                 e_val, e_std = self._evaluate_vmc(theta_b, n_samples=ns)
-                cost[b] = e_val
-                cost_std[b] = e_std
+            costs.append(e_val)
+            stds.append(e_std)
 
+        cost = torch.stack(costs)                       # autograd-tracked
+        cost_std = torch.stack(stds).detach()           # statistical info; backward never called on it
         penalty = torch.zeros_like(cost)
         return cost, penalty, cost_std
 
@@ -496,10 +528,13 @@ class J1J2Problem:
         Returns (E_mean, E_std_of_mean).
         """
         samples = self._sample_configs(theta, n_samples)
-        E_loc = self._local_energy_batch(theta, samples)    # (n_samples,)
+        E_loc = self._local_energy_batch(theta, samples)    # (n_samples,) complex
         E_mean = E_loc.mean()
         E_std_of_mean = E_loc.std() / math.sqrt(n_samples)
-        return E_mean.real.detach(), E_std_of_mean.real.detach()
+        # No .detach(): keep autograd graph through E_mean for partial gradient
+        # via gradient(). cost_std is detached at evaluate() call site (it never
+        # enters the backward path).
+        return E_mean.real, E_std_of_mean.real
 
     def _evaluate_exact(self, theta: torch.Tensor) -> torch.Tensor:
         """
@@ -521,7 +556,9 @@ class J1J2Problem:
 
         E_loc = self._local_energy_batch(theta, all_sigma)           # (2^N,) complex
         E = (probs.to(E_loc.dtype) * E_loc).sum().real
-        return E.detach()
+        # No .detach(): keep autograd graph through θ → log_psi → probs and E_loc
+        # so gradient() can backpropagate. See evaluate() docstring.
+        return E
 
     # ─────────────────────────────────────────────────────────────────────
     # Internal: Local energy computation (heart of the Hamiltonian)
