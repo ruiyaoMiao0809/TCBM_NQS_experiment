@@ -118,11 +118,10 @@ def log_psi_rbm(theta: torch.Tensor, sigma: torch.Tensor, N: int, M: int) -> tor
     ψ(σ; θ) = exp(Σ_i a_i σ_i) · Π_j 2 cosh(b_j + Σ_i W_ij σ_i)
     log ψ = Σ_i a_i σ_i  +  Σ_j log(2 cosh(b_j + Σ_i W_ij σ_i))
 
-    Stable log_cosh implementation:
-        log(2 cosh(x)) = |Re(x)| + log(1 + exp(-2|Re(x)|)) + i·Im(x) + corrections
-    For complex x = u + iv:
-        2 cosh(u + iv) = 2 (cosh(u) cos(v) + i sinh(u) sin(v))
-        log(2 cosh(x)) computed via stable formula
+    The hidden contribution Σ_j log(2·cosh(θ_j)) is computed by
+    `_log_2cosh_complex`, which absorbs the factor of 2 directly into the
+    function output (Carleo-Troyer 2017 / NetKet convention). The caller
+    therefore does not add a separate M·log(2) term.
 
     Parameters
     ----------
@@ -143,45 +142,77 @@ def log_psi_rbm(theta: torch.Tensor, sigma: torch.Tensor, N: int, M: int) -> tor
     # hidden activations: θ_j = b_j + Σ_i W_ij σ_i, shape (..., M)
     hidden_act = sigma_c @ W + b.unsqueeze(0)
 
-    # log(2 cosh(θ)) = log 2 + log cosh(θ), complex-safe
-    log_cosh_vals = _log_cosh_complex(hidden_act)     # (..., M)
-    h_contrib = log_cosh_vals.sum(dim=-1) + M * math.log(2.0)   # (...,)
+    # Σ_j log(2·cosh(θ_j)); factor of 2 already inside _log_2cosh_complex
+    log_2cosh_vals = _log_2cosh_complex(hidden_act)     # (..., M)
+    h_contrib = log_2cosh_vals.sum(dim=-1)              # (...,)
 
     return v_contrib + h_contrib
 
 
-def _log_cosh_complex(z: torch.Tensor) -> torch.Tensor:
+def _log_2cosh_complex(z: torch.Tensor) -> torch.Tensor:
     """
-    Stable log(cosh(z)) for complex z = u + iv.
+    Stable log(2·cosh(z)) for complex z = u + iv.
 
-    log(cosh(u + iv)) = log(cosh(u) cos(v) + i sinh(u) sin(v))
-                     = log|cosh(u+iv)| + i · arg(cosh(u+iv))
+    Returns the natural quantity for RBM hidden activations (Carleo-Troyer 2017
+    convention; see also NetKet log_cosh implementation), where each hidden
+    unit contributes log(2·cosh(θ_j)) and the factor of 2 is absorbed into
+    the function rather than tracked separately by the caller.
 
-    For |u| large:
-        log(cosh(u)) ≈ |u| - log(2)
-    Combined stable form avoids overflow.
+    Mathematical derivation
+    -----------------------
+    Magnitude: from |cosh(u+iv)|² = cosh²(u)·cos²(v) + sinh²(u)·sin²(v),
+    using cosh² = 1 + sinh² gives
+        |cosh(u+iv)|² = cosh²(u) - sin²(v).
+    Factor cosh²(u) = e^(2|u|)·(1 + e^(-2|u|))²/4 to expose the dominant
+    exponential:
+        |cosh(u+iv)|² = (e^(2|u|)/4) · [(1 + e^(-2|u|))² - 4·sin²(v)·e^(-2|u|)]
+    Taking log and adding log(2) for the factor of 2 in the function output,
+    the -log(2) from the |cosh| derivation cancels:
+        log|2·cosh(z)| = |u| + (1/2)·log[(1 + e^(-2|u|))² - 4·sin²(v)·e^(-2|u|)]
+
+    Phase: arg(2·cosh(z)) = arg(cosh(z)) since 2 > 0. Standard form:
+        arg(cosh(u+iv)) = atan2(sinh(u)·sin(v), cosh(u)·cos(v))
+    Divide both arguments by cosh(u) > 0 (which cancels in atan2):
+        arg(cosh(z)) = atan2(tanh(u)·sin(v), cos(v))
+    tanh has bounded output [-1, 1] for any u ∈ ℝ, so this form has no
+    overflow and a stable autograd backward.
+
+    Numerical stability
+    -------------------
+    a = exp(-2·|u|) ∈ [0, 1] never overflows. For |u| ≳ 51 (float32) or
+    ≳ 354 (float64), a underflows to 0 cleanly: inner → 1, log(inner) → 0,
+    and the result reduces to its asymptote |u| + i·sign(u)·v.
+    inner is strictly positive except at the cosh zeros z = i·(π/2 + k·π),
+    where inner = 0 and log diverges to -∞ (correct analytic behavior;
+    cosh is zero there). No epsilon clamp is added — clamps inject zero
+    gradients into the backward pass, which would silently corrupt training.
+
+    Autograd notes
+    --------------
+    abs(u) has zero subgradient at u=0 in PyTorch. Through the chain rule
+    on the full formula:
+        d log_magnitude / du
+            = sign(u) + (1/(2·inner)) · d_inner/du
+            = sign(u)·(1 - a²)/inner          (after algebraic simplification)
+    At u=0: a=1 ⇒ 1-a²=0 ⇒ derivative = 0, matching the analytic value
+    (log|cosh(iv)| is locally constant in u to first order). So abs(u)
+    is safe to use directly; no need for sqrt(u²+ε) regularization.
+
+    Parameters
+    ----------
+    z : (...,) complex tensor
+
+    Returns
+    -------
+    log_2cosh : (...,) complex tensor of same shape and dtype as z
     """
-    u = z.real
-    v = z.imag
-    # Re part of log(cosh): |u| - log(2) + log(1 + e^(-2|u|) + 2·cos(2v)·e^(-|u|) - ...)
-    # We use a simpler but numerically stable form:
-    # log(cosh(z)) = log((exp(z) + exp(-z)) / 2)
-    # For |u| large, stabilize by factoring out exp(|u|):
+    u, v = z.real, z.imag
     abs_u = torch.abs(u)
-    # cosh(u+iv) = cosh(u)cos(v) + i sinh(u)sin(v)
-    real_part = torch.cosh(u).clamp(min=1e-30) * torch.cos(v)   # can be negative
-    imag_part = torch.sinh(u) * torch.sin(v)
-    magnitude = torch.sqrt(real_part ** 2 + imag_part ** 2).clamp(min=1e-30)
-    phase = torch.atan2(imag_part, real_part)
-    # For large |u|, magnitude ~ 0.5 e^|u| * |cos(v)| ; use log form
-    # Practical shortcut (numerically OK for POC scale |u| < 30):
-    return torch.log(magnitude) + 1j * phase
-
-    # If overflow becomes an issue (|u| > 30), switch to:
-    # log_magnitude = abs_u - math.log(2.0) + torch.log(
-    #     torch.sqrt(1 + torch.exp(-2*abs_u) - 2*torch.cos(2*v)*torch.exp(-2*abs_u))
-    #     / 2.0  # TODO: derive exact stable form
-    # )
+    a = torch.exp(-2.0 * abs_u)                                     # ∈ [0, 1]
+    inner = (1.0 + a) ** 2 - 4.0 * torch.sin(v) ** 2 * a            # > 0 except at cosh zeros
+    log_magnitude = abs_u + 0.5 * torch.log(inner)
+    phase = torch.atan2(torch.tanh(u) * torch.sin(v), torch.cos(v))
+    return torch.complex(log_magnitude, phase)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -507,6 +538,28 @@ class J1J2Problem:
         For Heisenberg-type Hamiltonian H = Σ_{<ij>} J_ij S_i · S_j:
             S_i · S_j = S_i^z S_j^z + (1/2)(S_i^+ S_j^- + S_i^- S_j^+)
                       = (1/4) σ_i^z σ_j^z + (1/2)(σ_i^+ σ_j^- + σ_i^- σ_j^+)
+
+        Physical factor derivation (cross-check for Day 4-5 baseline)
+        --------------------------------------------------------------
+        Convention: spin-1/2 with S^z eigenvalues ±1/2, σ^z eigenvalues ±1.
+
+        Diagonal term:
+            S_i^z · S_j^z = (½ σ_i^z) · (½ σ_j^z) = (1/4) · σ_i^z σ_j^z
+            Coefficient per bond: J · (1/4) · σ_i σ_j        →  see J*0.25 below
+
+        Off-diagonal term:
+            S_i^+ = |↑⟩⟨↓|_i, matrix element = 1   (NOT 1/2; this is the
+                                                    raising operator on
+                                                    |↓⟩, which gives |↑⟩
+                                                    with coefficient 1).
+            S_j^- = |↓⟩⟨↑|_j, matrix element = 1
+            ⟨↑↓| S_i^+ S_j^- |↓↑⟩ = 1
+            ⟨↓↑| S_i^- S_j^+ |↑↓⟩ = 1   (h.c.)
+            For a given σ with σ_i ≠ σ_j, exactly ONE of (S^+ S^-, S^- S^+)
+            connects σ → σ' = flip(σ, i, j); the other gives 0.
+            So ⟨σ'| (S_i^+ S_j^- + S_i^- S_j^+) |σ⟩ = 1 (whenever σ_i ≠ σ_j).
+            With the (1/2) prefactor in H:
+            Coefficient per bond per such σ: J · (1/2) · ψ(σ')/ψ(σ)  → see J*0.5 below
 
         E_loc(σ) = Σ_{σ'} <σ|H|σ'> ψ(σ')/ψ(σ)
 
