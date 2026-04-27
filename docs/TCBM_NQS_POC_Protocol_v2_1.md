@@ -82,9 +82,23 @@ $$
 **参数**: Lattice 4×4 PBC, $J_1 = 1, J_2 = 0.5$（maximally frustrated point）, Hilbert dim $= 2^{16} = 65536$
 
 **Reference ground state energy**:
-- Source: Schulz-Ziman-Poilblanc 1996 + Sandvik 2007
-- Value: $E_0/N \approx -0.497$（4×4 PBC）
-- Day 3 自行验证
+- Source: Computed via `utils/ed_reference.py` (sparse Lanczos in $S_z=0$ sector, dim=12870)
+- Value: $E_0 = -8.4579$, $E_0/N = -0.5286$ (4×4 PBC, $J_2/J_1 = 0.5$)
+- Verification artifact: `results/ed_reference_j1j2_4x4_J2=0.50.json`
+
+**Note on literature reference**:
+Earlier drafts of this protocol cited "-0.497" attributed to Schulz-Ziman-Poilblanc
+1996 and Sandvik 2007. Re-verification on Day 1 (2026-04-27) revealed this was a
+LLM-attribution error: the value -0.497 is closer to a thermodynamic-limit estimate,
+not the 4×4 PBC finite-size value. Schulz-Ziman-Poilblanc 1996 itself warns that
+"the 16 site cluster shows anomalous finite size effects" in the region
+$0.3 < J_2/J_1 < 0.7$, exactly our working point. The N=32 ED data of Darradi et al.
+(arXiv:0806.3825) Fig 2 also lies below thermodynamic-limit CCM, supporting the
+expectation that 4×4 PBC E/N is more negative than -0.51. The first-principles ED
+value -0.5286 obtained here is consistent with this trend. Sanity verifications:
+J2=0.0 sanity gives $E_0/N = -0.7018$ (matches well-established benchmark $-0.7017$
+to 4 decimal digits); J2 scan gives the canonical V-shaped curve with gap collapse
+in the frustrated region $J_2/J_1 \in [0.5, 0.7]$.
 
 ### 1.2 P0 任务清单
 

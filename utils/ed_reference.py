@@ -22,10 +22,23 @@ Convention:
       bit k = 0 means spin ↓ at site k.
     - Site indexing: site (x, y) at index y*Lx + x, for x in [0, Lx), y in [0, Ly).
 
-Reference values (4×4 PBC, J1=1):
-    J2=0.0:  E_0/N ≈ -0.701  (Néel limit)
-    J2=0.5:  E_0/N ≈ -0.497  (maximally frustrated)
-    J2=1.0:  E_0/N ≈ -0.500  (near-stripe)
+Reference values (4×4 PBC, J1=1, this code's first-principles ED, verified Day 1 2026-04-27):
+    J2=0.0:  E_0/N = -0.7018  (Néel, well-established benchmark; matches literature
+                              -0.7017 to 4 decimal digits)
+    J2=0.5:  E_0/N = -0.5286  (maximally frustrated; this is FINITE-SIZE
+                              N=16 PBC, NOT thermodynamic limit. Schulz-Ziman-
+                              Poilblanc 1996 warns of "anomalous finite size
+                              effects" in J_2/J_1 ∈ [0.3, 0.7].)
+    J2=1.0:  E_0/N = -0.7685  (verified via --J2_scan; deeply negative because
+                              both J1 and J2 contribute fully at this point)
+
+Earlier draft cited "-0.497" for J2=0.5 — that was a thermodynamic-limit
+extrapolation, not the 4×4 finite-size value. Day 1 ED gives -0.5286, which
+is more negative due to finite-size effect (smaller N = more negative E/N
+in this regime). Independent corroboration from Darradi et al. (arXiv:0806.3825)
+N=32 ED data: their N=32 E/N at J_2/J_1=0.5 is also below CCM thermodynamic-limit
+extrapolation, consistent with stronger finite-size effect at smaller N.
+See docs/TCBM_NQS_POC_Protocol_v2_1.md §1.1 note for full discussion.
 
 Usage:
     python utils/ed_reference.py                           # default: 4x4, J2=0.5

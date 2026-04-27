@@ -69,9 +69,29 @@ $$
 | 等式约束数 | $m$ | 0 | NQS 无显式约束 |
 | 不等式约束数 | $p$ | 0 | NQS 无显式约束 |
 | 目标函数典型值 | $f(\theta_0)$ | $\approx 0$ | random init 时能量期望 |
-| 基态能量 | $E_0$ | $\approx -8.0$ | DMRG/QMC 文献，$E_0/N\approx -0.497$ |
-| Loss basin 量级 | $L_{\text{basin}}$ | $\approx 8$ | $\|E_0 - f(\theta_0)\|$ |
+| 基态能量 | $E_0$ | $-8.4579$ | First-principles ED via `utils/ed_reference.py` (4×4 PBC, $J_2/J_1=0.5$, $S_z=0$ sector dim=12870, Day 1 verification) |
+| 基态能量 per site | $E_0/N$ | $-0.5286$ | Same source. Note: Earlier draft cited "$-0.497$" from Schulz 1996 — revisited and corrected on Day 1 (literature value was thermodynamic-limit, not 4×4 PBC; see Protocol v2.1 §1.1 note). |
+| Loss basin 量级 | $L_{\text{basin}}$ | $\approx 8$ | $\|E_0 - f(\theta_0)\|$ — see post-Day-1 note below |
 | 梯度典型值 | $\|\nabla f(\theta_0)\|$ | $\approx 5$ | Bukov 2021 类似 setup 报告 |
+
+**R-abort-1 / P0-1.2 thresholds rebased to ED truth $E_0 = -8.4579$**:
+- R-abort-1 (Week 1 end): $|E_\text{TCBM} - E_0^\text{ED}| / |E_0^\text{ED}| > 15\%$
+- P0-1.2 success criterion: $|E_\text{TCBM} - E_0^\text{ED}| / |E_0^\text{ED}| < 10\%$
+- Earlier drafts implicitly used $E_0 \approx -8.0$ (matching the now-corrected $-0.497$
+  per-site value). Thresholds are unchanged in form (15% / 10%); the reference
+  value they apply to is now the verified ED $-8.4579$ rather than the hallucinated $-8.0$.
+
+**Day 1 post-verification note on $f(\theta_0)$ and $L_{\text{basin}}$**:
+Day 1 runtime check (`tmp_check_evaluate.py`) found $f(\theta_0) \approx 12.0$ at
+RBM random init (init_scale=0.01), not $\approx 0$. The discrepancy traces to
+$\langle H \rangle$ for a uniform $\psi$: VMC computes $E_\text{var} =
+\sum_\text{all H entries}/\dim_{\mathcal{H}}$ (since $\psi(\sigma')/\psi(\sigma) = 1$
+for uniform $\psi$ propagates off-diagonal contributions), not
+$\text{tr}(H)/\dim_{\mathcal{H}} = 0$. Analytical:
+$(32 J_1 + 32 J_2) \cdot 2^{N-2} / 2^N = 32 \cdot (1+0.5)/4 = 12.0$, matching
+the measured $11.99$. Consequently $L_{\text{basin}} = 11.99 - (-8.4579) \approx 20.45$,
+$\sim 2.5\times$ the table estimate. Implication: Day 4 baseline burn-in is longer than
+predicted; convergence judgment is unaffected (it uses relative error vs $E_0^\text{ED}$).
 
 ### 1.3 量级分析
 
