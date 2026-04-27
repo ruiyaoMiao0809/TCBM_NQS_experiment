@@ -1,0 +1,686 @@
+"""
+core/j1j2_problem.py
+====================
+J1J2Problem — 2D spin-1/2 frustrated Heisenberg model on square lattice.
+
+Target task for TCBM-NQS POC (Path γ, per TCBM_NQS_POC_Protocol_v2.md).
+
+Hamiltonian:
+    H = J1 · Σ_{<i,j>}   S_i · S_j    (nearest-neighbor)
+      + J2 · Σ_{<<i,j>>} S_i · S_j    (next-nearest-neighbor diagonal)
+
+This is the prototypical non-stoquastic Hamiltonian where NN-based variational
+Monte Carlo is known to struggle with rugged landscapes and sign-rule traps
+[Bukov, Schmitt & Dupont, SciPost Phys. 10, 147 (2021)].
+
+POC configuration (as per Protocol v2):
+  - Lattice: Lx × Ly with PBC, default 4×4
+  - Couplings: J1=1.0, J2=0.5 (maximally frustrated point)
+  - Ansatz: Complex Restricted Boltzmann Machine (Carleo-Troyer 2017)
+  - Hidden density: α = M/N, default 2 → M=2N hidden units
+  - Total parameters (real): D = 2·(N + M + N·M) = 1120 for 4×4 α=2
+
+═══════════════════════════════════════════════════════════════════════════════
+Interface contract (matches tcbm_optimizer_NQS.py expectations)
+═══════════════════════════════════════════════════════════════════════════════
+
+Required (all implemented in this skeleton):
+  • self.dim : int                            # D = 1120 for 4×4 α=2
+  • self.device : str
+  • self.random_feasible(batch_size) -> (B, D) Tensor
+  • self.evaluate(x, n_samples=None) -> (cost, penalty, cost_std)
+       cost:    (B,) energy estimates
+       penalty: (B,) zeros (NQS has no hard constraint)
+       cost_std: (B,) VMC statistical error, or None if deterministic mode
+  • self.gradient(positions) -> (B, D)         # via autograd
+
+Optional (implemented as Week 2 delivery stub, complete by Day 9):
+  • self.qgt(x, k_qgt=None) -> (D, D) Tensor  # quantum geometric tensor
+  • self.clamp_dims : None                     # no partial clamping needed
+  • self.dissipation_a, dissipation_b : None   # no R_inf bound needed
+
+═══════════════════════════════════════════════════════════════════════════════
+Week 1 delivery scope (this skeleton = Day 1-2 target):
+  - Lattice geometry + neighbor lists (PBC) ................  [implemented]
+  - Complex-RBM ansatz: log_psi, psi_amplitude ............  [implemented]
+  - Metropolis-Hastings VMC sampler .........................  [implemented]
+  - Local energy computation ................................  [implemented]
+  - evaluate() with n_samples stochastic loss ...............  [implemented]
+  - gradient() via autograd .................................  [implemented]
+  - qgt() stub (raise NotImplementedError) ..................  [Day 9 delivery]
+  - Unit tests for each method ..............................  [Day 3]
+
+═══════════════════════════════════════════════════════════════════════════════
+"""
+
+import math
+from typing import Optional, Tuple, List
+
+import numpy as np
+import torch
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RBM parameter layout utilities
+# ─────────────────────────────────────────────────────────────────────────────
+
+def rbm_param_layout(N: int, M: int) -> dict:
+    """
+    Complex RBM parameter vector layout (real representation).
+
+    The RBM has complex parameters:
+        visible bias a ∈ C^N      → 2N real params
+        hidden bias  b ∈ C^M      → 2M real params
+        weights      W ∈ C^(N×M)  → 2NM real params
+    Total D = 2(N + M + NM).
+
+    Real-valued flat vector θ stores them in this order:
+        [Re(a), Im(a), Re(b), Im(b), Re(W.flatten()), Im(W.flatten())]
+
+    Returns dict with slice indices and shapes for unpacking.
+    """
+    offsets = {}
+    ptr = 0
+    offsets['a_real'] = (slice(ptr, ptr + N), (N,));   ptr += N
+    offsets['a_imag'] = (slice(ptr, ptr + N), (N,));   ptr += N
+    offsets['b_real'] = (slice(ptr, ptr + M), (M,));   ptr += M
+    offsets['b_imag'] = (slice(ptr, ptr + M), (M,));   ptr += M
+    offsets['W_real'] = (slice(ptr, ptr + N*M), (N, M)); ptr += N*M
+    offsets['W_imag'] = (slice(ptr, ptr + N*M), (N, M)); ptr += N*M
+    offsets['total_dim'] = ptr
+    return offsets
+
+
+def unpack_rbm(theta: torch.Tensor, N: int, M: int):
+    """
+    Unpack flat real parameter vector into complex RBM parameters.
+
+    theta : (D,) real tensor
+    Returns a, b, W as complex tensors.
+    """
+    layout = rbm_param_layout(N, M)
+    a = torch.complex(theta[layout['a_real'][0]], theta[layout['a_imag'][0]])   # (N,)
+    b = torch.complex(theta[layout['b_real'][0]], theta[layout['b_imag'][0]])   # (M,)
+    W_real = theta[layout['W_real'][0]].reshape(N, M)
+    W_imag = theta[layout['W_imag'][0]].reshape(N, M)
+    W = torch.complex(W_real, W_imag)                                            # (N, M)
+    return a, b, W
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Complex-RBM log amplitude (stable implementation)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def log_psi_rbm(theta: torch.Tensor, sigma: torch.Tensor, N: int, M: int) -> torch.Tensor:
+    """
+    Compute log ψ(σ; θ) for Complex-RBM ansatz.
+
+    ψ(σ; θ) = exp(Σ_i a_i σ_i) · Π_j 2 cosh(b_j + Σ_i W_ij σ_i)
+    log ψ = Σ_i a_i σ_i  +  Σ_j log(2 cosh(b_j + Σ_i W_ij σ_i))
+
+    Stable log_cosh implementation:
+        log(2 cosh(x)) = |Re(x)| + log(1 + exp(-2|Re(x)|)) + i·Im(x) + corrections
+    For complex x = u + iv:
+        2 cosh(u + iv) = 2 (cosh(u) cos(v) + i sinh(u) sin(v))
+        log(2 cosh(x)) computed via stable formula
+
+    Parameters
+    ----------
+    theta : (D,) real tensor
+    sigma : (..., N) tensor of ±1 spins
+    N, M  : system dims
+
+    Returns
+    -------
+    log_psi : (...) complex tensor
+    """
+    a, b, W = unpack_rbm(theta, N, M)   # (N,), (M,), (N, M)
+
+    sigma_c = sigma.to(a.dtype)          # cast to complex
+    # visible contribution: σ · a, shape (...,)
+    v_contrib = sigma_c @ a              # (...,)
+
+    # hidden activations: θ_j = b_j + Σ_i W_ij σ_i, shape (..., M)
+    hidden_act = sigma_c @ W + b.unsqueeze(0)
+
+    # log(2 cosh(θ)) = log 2 + log cosh(θ), complex-safe
+    log_cosh_vals = _log_cosh_complex(hidden_act)     # (..., M)
+    h_contrib = log_cosh_vals.sum(dim=-1) + M * math.log(2.0)   # (...,)
+
+    return v_contrib + h_contrib
+
+
+def _log_cosh_complex(z: torch.Tensor) -> torch.Tensor:
+    """
+    Stable log(cosh(z)) for complex z = u + iv.
+
+    log(cosh(u + iv)) = log(cosh(u) cos(v) + i sinh(u) sin(v))
+                     = log|cosh(u+iv)| + i · arg(cosh(u+iv))
+
+    For |u| large:
+        log(cosh(u)) ≈ |u| - log(2)
+    Combined stable form avoids overflow.
+    """
+    u = z.real
+    v = z.imag
+    # Re part of log(cosh): |u| - log(2) + log(1 + e^(-2|u|) + 2·cos(2v)·e^(-|u|) - ...)
+    # We use a simpler but numerically stable form:
+    # log(cosh(z)) = log((exp(z) + exp(-z)) / 2)
+    # For |u| large, stabilize by factoring out exp(|u|):
+    abs_u = torch.abs(u)
+    # cosh(u+iv) = cosh(u)cos(v) + i sinh(u)sin(v)
+    real_part = torch.cosh(u).clamp(min=1e-30) * torch.cos(v)   # can be negative
+    imag_part = torch.sinh(u) * torch.sin(v)
+    magnitude = torch.sqrt(real_part ** 2 + imag_part ** 2).clamp(min=1e-30)
+    phase = torch.atan2(imag_part, real_part)
+    # For large |u|, magnitude ~ 0.5 e^|u| * |cos(v)| ; use log form
+    # Practical shortcut (numerically OK for POC scale |u| < 30):
+    return torch.log(magnitude) + 1j * phase
+
+    # If overflow becomes an issue (|u| > 30), switch to:
+    # log_magnitude = abs_u - math.log(2.0) + torch.log(
+    #     torch.sqrt(1 + torch.exp(-2*abs_u) - 2*torch.cos(2*v)*torch.exp(-2*abs_u))
+    #     / 2.0  # TODO: derive exact stable form
+    # )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lattice geometry (square lattice PBC)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def build_square_lattice_bonds(Lx: int, Ly: int) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
+    """
+    Build NN and NNN bond lists for square lattice with PBC.
+
+    Site labeling: site (x, y) -> index y*Lx + x, for x in [0, Lx), y in [0, Ly).
+
+    Returns
+    -------
+    nn_bonds  : list of (i, j) tuples, nearest-neighbor pairs (horizontal + vertical)
+    nnn_bonds : list of (i, j) tuples, next-nearest-neighbor pairs (diagonal)
+    """
+    def idx(x, y):
+        return (y % Ly) * Lx + (x % Lx)
+
+    nn_bonds = []
+    nnn_bonds = []
+
+    for y in range(Ly):
+        for x in range(Lx):
+            i = idx(x, y)
+            # NN: right, up (avoiding double-count via direction choice)
+            nn_bonds.append((i, idx(x + 1, y)))   # horizontal
+            nn_bonds.append((i, idx(x, y + 1)))   # vertical
+            # NNN: upper-right, upper-left diagonals
+            nnn_bonds.append((i, idx(x + 1, y + 1)))
+            nnn_bonds.append((i, idx(x - 1, y + 1)))
+
+    return nn_bonds, nnn_bonds
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Main J1J2Problem class
+# ─────────────────────────────────────────────────────────────────────────────
+
+class J1J2Problem:
+    """
+    2D spin-1/2 J1-J2 Heisenberg model on square lattice (PBC).
+
+    Example
+    -------
+    >>> problem = J1J2Problem(Lx=4, Ly=4, J1=1.0, J2=0.5, alpha=2, device='cuda')
+    >>> theta_batch = problem.random_feasible(batch_size=12)         # (12, D)
+    >>> cost, pen, std = problem.evaluate(theta_batch, n_samples=2000)
+    >>> grad = problem.gradient(theta_batch)                          # (12, D)
+    """
+
+    def __init__(
+        self,
+        Lx: int = 4,
+        Ly: int = 4,
+        J1: float = 1.0,
+        J2: float = 0.5,
+        alpha: int = 2,
+        device: str = 'cuda',
+        thermalization_steps: int = 500,
+        init_scale: float = 0.01,
+    ):
+        # Lattice
+        self.Lx = Lx
+        self.Ly = Ly
+        self.N = Lx * Ly
+        self.J1 = J1
+        self.J2 = J2
+        self.device = device
+
+        # RBM dimensions
+        self.M = alpha * self.N
+        self.alpha = alpha
+        layout = rbm_param_layout(self.N, self.M)
+        self.dim = layout['total_dim']   # D = 2(N + M + NM)
+        self._layout = layout
+
+        # Lattice bonds (precomputed)
+        nn_bonds, nnn_bonds = build_square_lattice_bonds(Lx, Ly)
+        self._nn_bonds  = torch.tensor(nn_bonds,  dtype=torch.long, device=device)   # (n_nn, 2)
+        self._nnn_bonds = torch.tensor(nnn_bonds, dtype=torch.long, device=device)   # (n_nnn, 2)
+
+        # VMC parameters
+        self.thermalization = thermalization_steps
+        self.init_scale = init_scale
+
+        # RNG
+        self._gen = torch.Generator(device=device)
+        self._gen.manual_seed(0)   # users override via optimizer's seed
+
+        # Dtype
+        self.real_dtype = torch.float32
+        self.complex_dtype = torch.complex64
+
+        # ── Optimizer interface hints ─────────────────────────────────────
+        # NQS parameter space is unconstrained real numbers. The optimizer
+        # queries these attrs via getattr; we declare them explicitly for
+        # clarity. See tcbm_optimizer_NQS.py §Configuration §Box-constraint.
+        self.box_constraint = False    # do NOT clamp θ to [0, 1] in Langevin
+        self.clamp_dims = self.dim     # clamping applies to all D params
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Interface required by TCBMOptimizer
+    # ─────────────────────────────────────────────────────────────────────
+
+    def random_feasible(self, batch_size: int) -> torch.Tensor:
+        """
+        Initial θ values (small random, centered around 0).
+
+        Small initialization is critical for RBM: large |W| causes cosh overflow
+        and gives poor initial energy. init_scale=0.01 is the common choice for
+        NQS papers (Carleo 2017, Bukov 2021).
+        """
+        return (torch.randn(batch_size, self.dim, dtype=self.real_dtype,
+                            device=self.device, generator=self._gen) * self.init_scale)
+
+    def evaluate(
+        self,
+        x: torch.Tensor,
+        n_samples: Optional[int] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+        """
+        Evaluate variational energy E(θ) for a batch of parameters.
+
+        Parameters
+        ----------
+        x : (B, D) real tensor
+        n_samples : int or None
+            If None: fallback to a fixed default (2000)
+            If positive: use this many VMC samples
+            If 0 or negative: use exact evaluation (only if N ≤ 12)
+
+        Returns
+        -------
+        cost : (B,) energies
+        penalty : (B,) zeros
+        cost_std : (B,) statistical errors, or None if exact
+        """
+        B = x.shape[0]
+        ns = n_samples if n_samples is not None else 2000
+
+        cost = torch.zeros(B, dtype=self.real_dtype, device=self.device)
+        cost_std = torch.zeros(B, dtype=self.real_dtype, device=self.device)
+
+        for b in range(B):
+            theta_b = x[b]
+            if self.N <= 12 and ns <= 0:
+                # Exact (full Hilbert space enumeration) — use for small tests only
+                e_val = self._evaluate_exact(theta_b)
+                cost[b] = e_val
+                cost_std[b] = 0.0
+            else:
+                # Stochastic VMC estimate
+                e_val, e_std = self._evaluate_vmc(theta_b, n_samples=ns)
+                cost[b] = e_val
+                cost_std[b] = e_std
+
+        penalty = torch.zeros_like(cost)
+        return cost, penalty, cost_std
+
+    def gradient(self, positions: torch.Tensor) -> torch.Tensor:
+        """
+        Batched gradient of variational energy via autograd.
+
+        Note: for stochastic evaluate, this is a noisy estimate.
+        For production NQS, the proper gradient uses the log-derivative estimator:
+            ∇_θ E = 2 Re[ ⟨ E_loc(σ) · (∂_θ log ψ*(σ)) ⟩ - ⟨E_loc⟩ · ⟨∂_θ log ψ*⟩ ]
+        That estimator has lower variance. For POC scope we use autograd on the
+        stochastic evaluate, which is simpler and sufficient for demonstration.
+
+        TODO (Week 2 optimization): implement the log-derivative gradient estimator
+        when VMC gradient noise becomes the bottleneck.
+        """
+        x = positions.detach().requires_grad_(True)
+        cost, pen, _ = self.evaluate(x)
+        total = (cost + pen).sum()
+        total.backward()
+        return x.grad.detach().clone()
+
+    def qgt(
+        self,
+        x: torch.Tensor,
+        k_qgt: Optional[int] = None,
+    ) -> torch.Tensor:
+        """
+        Quantum Geometric Tensor (QGT) at x[0] (cold replica).
+
+        S_ij = Re[ ⟨ O_i* O_j ⟩ - ⟨O_i*⟩ ⟨O_j⟩ ]
+        where O_i(σ) = ∂_i log ψ(σ, θ).
+
+        Implementation (POC, D=1120 scale):
+          - Draw VMC samples from |ψ|^2
+          - Per-sample log-derivative via torch.func.vmap
+          - Build full (D, D) QGT matrix
+
+        For larger D, return low-rank factor V with QGT ≈ V·V.T. Not needed for POC.
+
+        Returns
+        -------
+        S : (D, D) real tensor, symmetric, PSD
+
+        NOTE: This is the Day 9 delivery. Stub for now.
+        """
+        raise NotImplementedError(
+            "qgt() is Week 2 Day 9 delivery. For Week 1, use subspace_source='gradient'."
+        )
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Internal: VMC sampling
+    # ─────────────────────────────────────────────────────────────────────
+
+    def _sample_configs(
+        self,
+        theta: torch.Tensor,
+        n_samples: int,
+        n_chains: int = 4,
+    ) -> torch.Tensor:
+        """
+        Draw samples from |ψ(σ; θ)|^2 via Metropolis-Hastings.
+
+        Uses single spin-flip proposal. Runs n_chains parallel Markov chains,
+        each contributing n_samples/n_chains samples after thermalization.
+
+        Parameters
+        ----------
+        theta : (D,) real tensor
+        n_samples : int
+        n_chains : int, default 4
+
+        Returns
+        -------
+        samples : (n_samples, N) tensor of ±1 spins
+        """
+        per_chain = n_samples // n_chains
+        total_steps = self.thermalization + per_chain
+
+        # Initialize chains uniformly random
+        sigma = (2 * torch.randint(
+            0, 2, (n_chains, self.N), dtype=torch.long,
+            device=self.device, generator=self._gen) - 1).to(self.real_dtype)
+
+        log_psi_current = log_psi_rbm(theta, sigma, self.N, self.M)
+        log_prob_current = 2.0 * log_psi_current.real
+
+        collected = []
+        for step in range(total_steps):
+            # Propose single-spin flips
+            flip_sites = torch.randint(
+                0, self.N, (n_chains,), device=self.device, generator=self._gen)
+            sigma_proposed = sigma.clone()
+            # Flip sign at proposed site for each chain
+            rows = torch.arange(n_chains, device=self.device)
+            sigma_proposed[rows, flip_sites] = -sigma[rows, flip_sites]
+
+            log_psi_proposed = log_psi_rbm(theta, sigma_proposed, self.N, self.M)
+            log_prob_proposed = 2.0 * log_psi_proposed.real
+
+            log_u = torch.rand(
+                n_chains, device=self.device, generator=self._gen).log()
+            accept = log_u < (log_prob_proposed - log_prob_current)
+
+            sigma = torch.where(accept.unsqueeze(-1), sigma_proposed, sigma)
+            log_prob_current = torch.where(
+                accept, log_prob_proposed, log_prob_current)
+
+            if step >= self.thermalization:
+                collected.append(sigma.clone())
+
+        samples = torch.cat(collected, dim=0)    # (n_chains * per_chain, N)
+        return samples[:n_samples]
+
+    def _evaluate_vmc(
+        self,
+        theta: torch.Tensor,
+        n_samples: int,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Estimate E(θ) = ⟨E_loc(σ)⟩ via VMC.
+
+        Returns (E_mean, E_std_of_mean).
+        """
+        samples = self._sample_configs(theta, n_samples)
+        E_loc = self._local_energy_batch(theta, samples)    # (n_samples,)
+        E_mean = E_loc.mean()
+        E_std_of_mean = E_loc.std() / math.sqrt(n_samples)
+        return E_mean.real.detach(), E_std_of_mean.real.detach()
+
+    def _evaluate_exact(self, theta: torch.Tensor) -> torch.Tensor:
+        """
+        Exact evaluation via full Hilbert-space enumeration. Use only for N ≤ 12.
+        """
+        # Enumerate all 2^N spin configurations
+        all_sigma = []
+        for i in range(2 ** self.N):
+            bits = [(i >> k) & 1 for k in range(self.N)]
+            sigma_i = torch.tensor(
+                [2*b - 1 for b in bits], dtype=self.real_dtype, device=self.device)
+            all_sigma.append(sigma_i)
+        all_sigma = torch.stack(all_sigma, dim=0)    # (2^N, N)
+
+        log_psi = log_psi_rbm(theta, all_sigma, self.N, self.M)     # (2^N,) complex
+        prob_unnorm = torch.exp(2.0 * log_psi.real)
+        Z = prob_unnorm.sum()
+        probs = prob_unnorm / Z
+
+        E_loc = self._local_energy_batch(theta, all_sigma)           # (2^N,) complex
+        E = (probs.to(E_loc.dtype) * E_loc).sum().real
+        return E.detach()
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Internal: Local energy computation (heart of the Hamiltonian)
+    # ─────────────────────────────────────────────────────────────────────
+
+    def _local_energy_batch(
+        self,
+        theta: torch.Tensor,
+        sigma: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Compute E_loc(σ) for a batch of spin configurations.
+
+        For Heisenberg-type Hamiltonian H = Σ_{<ij>} J_ij S_i · S_j:
+            S_i · S_j = S_i^z S_j^z + (1/2)(S_i^+ S_j^- + S_i^- S_j^+)
+                      = (1/4) σ_i^z σ_j^z + (1/2)(σ_i^+ σ_j^- + σ_i^- σ_j^+)
+
+        E_loc(σ) = Σ_{σ'} <σ|H|σ'> ψ(σ')/ψ(σ)
+
+        The only σ' that contribute are σ itself (diagonal, from S^z S^z) and
+        σ with a pair (i,j) of opposite-sign spins FLIPPED (off-diagonal, from
+        S^+ S^- terms).
+
+        Parameters
+        ----------
+        theta : (D,) real tensor
+        sigma : (B, N) tensor of ±1
+
+        Returns
+        -------
+        E_loc : (B,) complex tensor
+        """
+        B = sigma.shape[0]
+        E_loc = torch.zeros(B, dtype=self.complex_dtype, device=self.device)
+
+        log_psi_cur = log_psi_rbm(theta, sigma, self.N, self.M)   # (B,) complex
+
+        # Process NN bonds (coupling J1)
+        for bond_type, bonds, J in [
+            ('NN', self._nn_bonds, self.J1),
+            ('NNN', self._nnn_bonds, self.J2),
+        ]:
+            if len(bonds) == 0:
+                continue
+            for pair_idx in range(bonds.shape[0]):
+                i = int(bonds[pair_idx, 0])
+                j = int(bonds[pair_idx, 1])
+                si = sigma[:, i]
+                sj = sigma[:, j]
+
+                # Diagonal part: J · (1/4) σ_i^z σ_j^z   (σ^z eigenvalue = ±1)
+                # Factor 1/4 from spin-1/2: S^z = (1/2) σ^z
+                E_loc = E_loc + (J * 0.25 * si * sj).to(self.complex_dtype)
+
+                # Off-diagonal: J · (1/2)(S_i^+ S_j^- + S_i^- S_j^+)
+                # Non-zero only when σ_i ≠ σ_j (i.e., si*sj = -1)
+                # Flipping both spins in this case gives σ' with ψ(σ') amplitude
+                # Contribution: J · (1/2) · ψ(σ')/ψ(σ) for those σ
+                mask = (si * sj < 0)        # (B,) boolean
+                if mask.any():
+                    sigma_flipped = sigma.clone()
+                    sigma_flipped[:, i] = -si
+                    sigma_flipped[:, j] = -sj
+                    log_psi_flipped = log_psi_rbm(
+                        theta, sigma_flipped, self.N, self.M)
+                    ratio = torch.exp(log_psi_flipped - log_psi_cur)    # (B,) complex
+                    # Factor 1/2 from (1/2)(S^+ S^- + S^- S^+): for spin-1/2,
+                    # S^+|↓⟩ = |↑⟩, S^-|↑⟩ = |↓⟩, so S_i^+ S_j^- |↓↑⟩ = |↑↓⟩
+                    # coefficient is 1 (not 1/2). Combined with 1/2 in front:
+                    # matrix element of (S_i^+ S_j^- + h.c.) between |↑↓⟩ and |↓↑⟩ is 1.
+                    # So contribution is J · (1/2) · ratio · (mask).
+                    off_diag_contrib = J * 0.5 * ratio
+                    E_loc = E_loc + off_diag_contrib * mask.to(self.complex_dtype)
+
+        return E_loc
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Unit tests (Week 1 Day 3 delivery)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_dimensions():
+    """Verify parameter count matches formula D = 2(N + M + NM)."""
+    problem = J1J2Problem(Lx=4, Ly=4, alpha=2, device='cpu')
+    assert problem.N == 16
+    assert problem.M == 32
+    expected_D = 2 * (16 + 32 + 16 * 32)
+    assert problem.dim == expected_D, f"Expected D={expected_D}, got {problem.dim}"
+    print(f"  ✓ dim check: D = {problem.dim}")
+
+
+def test_bonds():
+    """Verify bond counts on 4×4 PBC."""
+    problem = J1J2Problem(Lx=4, Ly=4, alpha=2, device='cpu')
+    # On L×L PBC: 2·L² NN bonds (horizontal + vertical), 2·L² NNN bonds (2 diagonals)
+    expected_nn = 2 * 16
+    expected_nnn = 2 * 16
+    assert problem._nn_bonds.shape[0] == expected_nn
+    assert problem._nnn_bonds.shape[0] == expected_nnn
+    print(f"  ✓ bonds: {expected_nn} NN, {expected_nnn} NNN")
+
+
+def test_log_psi_stability():
+    """Verify log_psi returns finite values for random θ."""
+    problem = J1J2Problem(Lx=4, Ly=4, alpha=2, device='cpu')
+    theta = problem.random_feasible(1)[0]
+    sigma = torch.randint(0, 2, (8, problem.N), dtype=torch.long) * 2 - 1
+    sigma = sigma.to(torch.float32)
+    log_psi = log_psi_rbm(theta, sigma, problem.N, problem.M)
+    assert torch.isfinite(log_psi.real).all()
+    assert torch.isfinite(log_psi.imag).all()
+    print(f"  ✓ log_psi stability: max |log_psi| = {log_psi.abs().max():.3f}")
+
+
+def test_evaluate_stochastic():
+    """Verify evaluate returns (cost, penalty, std) with std > 0."""
+    problem = J1J2Problem(Lx=4, Ly=4, alpha=2, device='cpu')
+    theta_batch = problem.random_feasible(3)
+    cost, pen, std = problem.evaluate(theta_batch, n_samples=500)
+    assert cost.shape == (3,)
+    assert pen.shape == (3,) and pen.abs().max() == 0
+    assert std.shape == (3,) and (std > 0).all()
+    print(f"  ✓ evaluate: cost = {cost.tolist()}, std = {std.tolist()}")
+
+
+def test_sigma_std_sqrt_scaling():
+    """Verify σ_E scales as 1/√N_samples."""
+    problem = J1J2Problem(Lx=4, Ly=4, alpha=2, device='cpu')
+    theta = problem.random_feasible(1)
+    _, _, std_small = problem.evaluate(theta, n_samples=200)
+    _, _, std_large = problem.evaluate(theta, n_samples=800)   # 4× samples
+    ratio = (std_small / std_large).item()
+    # Should be ~ √4 = 2, with Monte Carlo noise tolerance ±50%
+    assert 1.3 < ratio < 3.0, f"std scaling wrong: ratio = {ratio}"
+    print(f"  ✓ σ scaling with 1/√N: ratio = {ratio:.2f} (expected ~2)")
+
+
+def test_energy_physical_range():
+    """Verify E for random θ is in [-2N, 2N] physical range."""
+    problem = J1J2Problem(Lx=4, Ly=4, alpha=2, device='cpu')
+    theta_batch = problem.random_feasible(5)
+    cost, _, _ = problem.evaluate(theta_batch, n_samples=500)
+    N = problem.N
+    assert (-2 * N < cost).all() and (cost < 2 * N).all(), \
+        f"Energy out of range [{-2*N}, {2*N}]: {cost.tolist()}"
+    print(f"  ✓ energies in [{-2*N}, {2*N}]: {cost.tolist()}")
+
+
+def test_gradient_shape():
+    """Verify gradient returns (B, D)."""
+    problem = J1J2Problem(Lx=4, Ly=4, alpha=2, device='cpu')
+    theta_batch = problem.random_feasible(2)
+    grad = problem.gradient(theta_batch)
+    assert grad.shape == (2, problem.dim)
+    assert torch.isfinite(grad).all()
+    print(f"  ✓ gradient: shape {grad.shape}, ||grad|| = {grad.norm(dim=1).tolist()}")
+
+
+if __name__ == "__main__":
+    print("J1J2Problem skeleton — unit tests")
+    print("=" * 60)
+
+    print("\n[1] Dimensions")
+    test_dimensions()
+
+    print("\n[2] Bond structure")
+    test_bonds()
+
+    print("\n[3] log_psi stability")
+    test_log_psi_stability()
+
+    print("\n[4] evaluate() stochastic contract")
+    test_evaluate_stochastic()
+
+    print("\n[5] σ_E ∝ 1/√N_samples scaling")
+    test_sigma_std_sqrt_scaling()
+
+    print("\n[6] Energy physical range")
+    test_energy_physical_range()
+
+    print("\n[7] gradient() shape")
+    test_gradient_shape()
+
+    print("\n" + "=" * 60)
+    print("[ALL SKELETON TESTS PASSED]")
+    print("\nTODOs for Week 1 Day 3-7:")
+    print("  - [ ] Build sparse H via scipy, ED reference E_0 (see Protocol P0-1.3)")
+    print("  - [ ] TCBM-gradient baseline reaches < 10% error (P0-1.2)")
+    print("  - [ ] Adam baseline (P1-1.1)")
+    print("  - [ ] SR baseline (P1-1.2)")
+    print("\nTODO for Week 2 Day 8-9:")
+    print("  - [ ] Implement qgt() method using torch.func.vmap + grad")
+    print("  - [ ] Verify symmetric + PSD + low-rank structure")

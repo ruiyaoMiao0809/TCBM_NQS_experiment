@@ -1,0 +1,35 @@
+name: tcbm_nqs
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.11
+
+  # ML/numerical core
+  - pytorch>=2.1
+  - pytorch-cuda=12.1
+  - numpy>=1.24
+  - scipy>=1.10
+
+  # Data handling and analysis
+  - pandas>=2.0
+  - matplotlib>=3.7
+  - seaborn>=0.13
+
+  # Testing and dev tools
+  - pytest>=7.0
+  - tqdm>=4.65
+
+  # Misc
+  - pyyaml
+  - pip
+
+  # Optional: pip-only packages
+  - pip:
+      # Uncomment if doing GCNN extension (Week 3 P2 or future work):
+      # - netket>=3.12
+      # - jax>=0.4
+      # - flax
+      # - optax
+      []
