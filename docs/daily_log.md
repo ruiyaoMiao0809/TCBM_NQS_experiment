@@ -165,3 +165,163 @@
 - Day 0 骨架的 `gradient()` 在静态测试下看似 ok，但在 backward 时直接崩。教训：
   unit test 必须实际跑反向传播，光检查 forward shape 不够。子任务 B 的 pytest
   集成是 Day 4 baseline 不会崩的保险栓。
+
+---
+
+## Day 2 (2026-04-28)
+
+### 计划
+- [x] Step 0a: σ_E ratio re-verification (raw stdout, no rounding)
+- [x] Step 0b: 加 L_basin theoretical-derivation caveat 到 Day 1 log
+- [x] Step 1: Reference code orientation (vmc_jax + netket_reference)
+- [x] Step 2: Bukov 2021 anchor 提取 + 修正 Prediction v2 三处 hallucination
+- [x] Step 3: 写 `experiments/run_gradient_baseline.py` (production)
+- [x] Step 4: nvidia-smi sanity (GPU 0 占用 → 切到 GPU 3)
+- [⏰] Step 5: 启动 P0-1.2 baseline run — **6h22min timeout, SIGTERM, no verdict**
+- [—] Step 6: verdict + Day 2 收尾 (无法判 PASS/MARGINAL/R-ABORT，inconclusive)
+- [x] (forward work) `experiments/run_gradient_baseline_smaller.py` 写了不跑
+- [x] (forward work) `docs/known_issues_day2.md` 记录 3 issues
+- [x] Day 2 收尾: GPU 清理 verify + commit + daily_log
+
+### 实际完成
+
+**Step 0a (σ_E ratio re-verification)**:
+- tmux 内重跑 `tmp_sigma_check.py`（`torch.manual_seed(0)`, J2=0.5 4×4, 3 个 sample sizes）
+- raw stdout（精度 8 d.p.）：
+  - n=500: σ_E = 0.00955384
+  - n=2000: σ_E = 0.00474325
+  - n=8000: σ_E = 0.00236895
+- ratio 500/2000 = **2.014196**, ratio 2000/8000 = **2.002260**（理论 = 2.000）
+- Day 1 ratios 1.999/1.978 也是真实数据（不同 RNG state，统计涨落 0.7-2% 内）
+- commit `10d4981`: "Day 2: add L_basin theoretical-derivation caveat to Day 1 log"
+
+**Step 0b (L_basin caveat)**:
+- 加在 Day 1 §section 4 "L_basin bonus" 末尾
+- 指出 "sum-of-all-H-entries/dim = 12" 推导跳步（H traceless 但非对角和涉及 binomial coeff），
+  实测 12 可信但 Week 3 SI 不能直接抄推导
+
+**Step 1 (Reference code orientation)**:
+- vmc_jax 索引建立：`jVMC/util/{tdvp,minsr}.py` (SR/NaturalGradient)，`jVMC/operator/{base,branch_free}.py`，
+  无专用 J1J2 example（broader keyword grep `frustrated|j2|J_2|nnn` 也零命中），Bukov 2021 reproducer 不在此 mirror
+- netket_reference 索引：**`Examples/HeisenbergJ1J2/heisenbergJ1J2.py` is 2D square** with
+  `nk.graph.Square(L, max_neighbor_order=2)`, `nk.operator.Heisenberg(... J=[1.0, 0.5])`, `total_sz=0`
+  → 直接 fork target for Day 8 SR baseline (只需 L=10 → L=4)
+
+**Step 2 (Bukov 2021 anchor + 3 hallucination fixes)**:
+- arxiv:2011.11214 PDF fetch 成功，`docs/bukov_2021_anchor.md` 写入 verbatim quotes
+- 修正 Prediction v2 三处 LLM hallucination（commit `07e005e`，amend 后 hash）：
+  1. §2.2: "Bukov ΔE_hump/N ≈ 0.05-0.10" → 实际 paper 不做 barrier interpolation 分析
+  2. §2.3: "λ_min/λ_max ≈ 0.2-0.3" → Fig 11 不显式给 ratio；4×4 ~10^-2，6×6 ~10^2
+  3. §5.4/§5.6: "σ(E)/|E| ≈ 5-10%" → Fig 12 spread ~10^-3 to 10^-2 → ~0.5-2% on N=6×6
+- §2.4 T2 ratio 主体改 conservative/optimistic 双边界 (T2 = 20 reference / 160 sensitivity)
+- §6.2 / §8.1 / end-of-doc Stage V deliverable 同步 sync (single source of truth principle)
+- 2 文件改动: 172 inserts / 35 deletes
+
+**Step 3 (production script)**:
+- `experiments/run_gradient_baseline.py` 写完, 165 行
+- TCBMConfig 字段全部 verify（`subspace_source`, `n_vmc_samples`, `n_vmc_samples_final`, etc.）
+- result dict key verify (`T_w` 不是 `T_w_step`, `trajectory.swap_acceptance` 是 per-record list 而非 mean)
+- 加 swap_acceptance early/mid/late 分段诊断 + LCM(10,15)=30 stale-value caveat
+- 加 NQS-1e debiasing sanity check (`debiased < raw`)
+- save_data 改 full trajectory dump (~300 records × 3 fields ≈ 7 KB)
+
+**Step 4 (GPU sanity)**:
+- GPU 0 free 仅 5.6 GB（别人 17.4 GB qwen9b training 占用）
+- GPU 3 free 22.7 GB, util 17% → switched to `device='cuda:3'`
+- Verify J1J2Problem + TCBMOptimizer 内 device 全部 thread `self.device`，无 hardcode
+
+**Step 5 (baseline run, FAILED)**:
+- 09:06 launch, expected 30 min, **6h22min timeout @ 15:28 SIGTERM**
+- stdout log = 0 bytes (block-buffered through tee + Python -u not applied)
+- JSON output = 不存在 (atexit handler 没注册 SIGTERM trigger)
+- Heartbeat (90s) 完整 4h coverage（+13 min initial gap due to path bug at launch）
+- 抢救出 5 个 phase 的 wall-clock 结构（见关键数字段）
+
+### 关键数字
+
+| 量 | 值 | 来源 |
+|---|---|---|
+| σ_E ratio 500/2000 (Day 2 redo) | **2.014196** | Step 0a raw stdout |
+| σ_E ratio 2000/8000 (Day 2 redo) | **2.002260** | Step 0a raw stdout |
+| Bukov 2021 anchor σ(E)/|E| (6×6) | 0.5%-2% (Fig 12) | not 5-10% as in old draft |
+| Bukov 2021 anchor Hessian λ ratio | 4×4: ~10^-2 / 6×6: ~10^2 | Fig 11，无显式 ratio |
+| Bukov 2021 NMC | 2^15 = 32768 samples/iter | Section 6.1 |
+| Production script 行数 | 165 | run_gradient_baseline.py |
+| GPU 3 baseline mem (Phase 1) | 3415 MB stable 4h38min | heartbeat |
+| GPU 3 baseline mem (Phase 2-5) | **22064 MB** stable 1h45min | NQS-1e final eval |
+| GPU 3 util (Phase 1) | 86-99% sustained | heartbeat |
+| GPU 3 util (Phase 2-5) | 8-100% volatile (3 次 dip-ramp) | heartbeat |
+| Baseline wall-clock | **6h22min** vs 估算 30 min | **6.5× underestimate** |
+| stdout output | **0 bytes** | block-buffered, no flush |
+| JSON output | **不存在** | atexit 不在 SIGTERM 触发 |
+| Days 2 commits | 4 个 (10d4981, 07e005e, b8908c7, +daily_log) | + 1 amend |
+
+### 发现/问题
+
+1. **VMC evaluate cost 严重低估 (~6× wall-clock)**
+   - Day 1 single-evaluate timing 推算 0.6s/step，实测 ~7s/step
+   - Root cause hypothesis: `J1J2Problem.evaluate()` per-replica sequential，未 batched over M=12
+   - Implication: Day 3 retry n_vmc_samples=4000 → 12h, 不可行；Week 3 sweep 15 seeds × 4 methods → 250-300h
+   - **Fix path** (Day 8-9 scope): batch `_evaluate_vmc` over M dimension, 估计 5-8× speedup
+   - Validated: Bukov 2021 用 NMC=2^15 (16× larger) on multi-day timeframes，我们 4×4 慢是"expected"
+
+2. **Python SIGTERM 默认不触发 atexit, stdout block-buffered through tee**
+   - Production script 没注册 `signal.signal(SIGTERM, ...)` 也没 `python -u`
+   - 6h22min 计算结果 → 0 bytes 数据。**100% 数据丢失**
+   - Day 3 fix: signal handler + `sys.stdout.reconfigure(line_buffering=True)` + atexit partial JSON dump
+
+3. **Bukov 2021 三处 fabricated 数字成功定位 + 修正**
+   - 在 Prediction v2 全文 propagate 7 处（主推导 2 处 + deliverable block 2 处 + summary table 1 处 + end-of-doc 2 处）
+   - 单 source of truth (§2.4) 改后下游 4 处全部 sync，避免 incremental edit drift
+   - 文件: `docs/bukov_2021_anchor.md` (110 行 verbatim quotes 锚定)
+
+4. **GPU 3 ptrace_scope=1 + py-spy 装上但拿不到 stack frame**
+   - 疑似 hang 时无法 inspection stack（需 sudo or setcap）
+   - Workaround: `/proc/PID/task/*/wchan` 查 deadlock pattern (tested ✓)
+   - Day 3+ scope: 提前 register `faulthandler.dump_traceback_later(N=900)` 自动每 15min dump
+
+5. **NetKet J1J2 example is 2D square (good news for Day 8)**
+   - `Examples/HeisenbergJ1J2/heisenbergJ1J2.py` uses `nk.graph.Square(L, max_neighbor_order=2)`
+   - 默认 L=10 (10×10), 改 L=4 即可，其他 SR/preconditioner/solver API 直接借用
+
+### 红线状态
+
+- **R-abort-1** (Week 1 end |E_TCBM - E_0|/|E_0| > 15%): **inconclusive — no verdict data**
+  - Day 3 重跑 production v2 (with robustness fixes) 才能判定
+- **R-abort-2** (Week 2 end QGT > 90s/step): pending Week 2
+- **R-abort-3** (Week 3 σ_TCBM/σ_Adam > 0.8): pending Week 3
+- **R-abort-4** (Day 7 ψ < 1.1, T4a RED): pending Day 7
+
+### 明日 (Day 3)
+
+**Plan: production retry with full robustness (option D in 裁决 matrix)**
+
+- 09:00-10:00 **Step A**: 改 `core/tcbm_optimizer_NQS.py` 加 `callback: Optional[Callable[[int, dict], None]]` 参数到 `optimize()`，每 100 步触发；
+  pytest 验证 callback 真的被调用 + 不破 Day 1 16 tests
+- 10:00-11:00 **Step B**: 写 `experiments/run_gradient_baseline_v2.py`：
+  - `sys.stdout.reconfigure(line_buffering=True)`
+  - `signal.signal(SIGTERM, _sigterm_handler)`
+  - `atexit.register(_atexit_dump)` partial JSON
+  - cfg: `n_vmc_samples_final = 4 → 2`（final eval ~30% wall reduction，σ_E ↑ 30%，对 verdict 无影响）
+- 11:00-11:15 **Step C**: 写 `experiments/benchmark_per_step.py` (n_steps=100)，测真实 per-step wall:
+  - projected total < 4h → 进 Step D
+  - 4-8h → 评估 trade-off，等 Nick 裁决
+  - > 8h → 提前做 batched evaluate refactor
+- 11:15+ **Step D**: production launch with `python -u`，预期 3-5h based on benchmark
+- **Step E** monitoring: 每 30 min check log file 有无新 progress lines (script will print every 100 steps)
+- **Step F** verdict: PASS / MARGINAL / R-ABORT 按原阈值（10% / 15%）
+
+**GPU 选择 caveat**: GPU 3 现已被 dglg 另一个 baselines/train_compare.py 占；Day 3 启动前重新 nvidia-smi 选最 free 的 GPU。
+
+### Day 2 反思
+
+1. **Wall-clock 估算系统性低估 6×**——Day 1 单次 evaluate timing 不能直接外推到 3000 步 + M=12 replicas + autograd 重复构图。下次估算前必须先做 micro-benchmark (100 步实测)，不能信任单次 evaluate 时间外推。
+
+2. **Python stdout buffering + SIGTERM atexit 是单点故障**——production-grade 长任务必须三件套：`python -u` (unbuffered) + `signal.signal(SIGTERM, ...)` (graceful) + `atexit.register(dump)` (partial JSON)。Day 3 v2 全部加上。
+
+3. **Hard checkpoint 应主动 ping，不只等 Monitor trigger**——Day 2 的 14:30 / 14:40 / 15:00 三个 cap 我都是 passively 等。Nick 反馈 calibrated：被动等 Monitor 是合理 LLM default，但用户 spec 写"下次行动 14:30"那种就是 hard checkpoint，必须 active polling。
+
+4. **Bukov hallucination 发现链值得 paper 写作时引用**——LLM (Claude) prior knowledge 给的 Bukov 数字三处都错（5-10% σ, 0.05-0.10 hump, 0.2-0.3 λ ratio），但通过 web fetch 原 PDF 全部纠正。这暴露 LLM-only 文献综述的 systematic risk，下次不能再依赖 prior knowledge，必须 fetch 原 source。
+
+5. **Forward work during long wait 是 productive**——Day 2 6h22min 等待期写了 `run_gradient_baseline_smaller.py` fallback + `known_issues_day2.md`，没浪费完全。下次 long wait 也按这个模式。
+
