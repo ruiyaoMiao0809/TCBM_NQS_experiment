@@ -118,6 +118,15 @@
    - **影响**: Day 4 baseline 的 burn-in 阶段会比预测的长（要 close 20+ 而非 8 的能量差）；
      不影响 10% 误差判据，但 step_size/n_steps 应该按这个 scale 检查
 
+   **[Day 1 末尾追加 — Nick's spot-check, Day 2 进入前]**:
+   L_basin ≈ 20 的实测数字可信（Random init E ≈ 12 是直接 evaluate 出来的）。但
+   "sum-of-all-H-entries/dim = 12" 这个理论推导跳了几步：H 是 traceless（对角项
+   ∑_σ H_σσ = 0，因为 σ_i σ_j 在四种 (±,±) 上正负抵消），非对角项的精确 sum 涉及
+   binomial coefficients (∑_bond J · 2 · C(N-2, N/2-1))，不是简单的 1/4 因子。
+   实测数字 12 是从 evaluate(theta) under uniform-ish init 直接得到的，可信用作
+   Day 4-5 baseline 估计。但 Week 3 SI 写作时**这个推导段不能直接抄**，需要重做
+   解析或改为纯 empirical 表述（"observed L_basin ≈ 20 from N runs at random init"）。
+
 ### 红线状态
 
 - **R-abort-1** (Week 1 end |E_TCBM - E_0|/|E_0| > 15%): pending Day 4-5 baseline
