@@ -55,3 +55,30 @@ profiling.
 - Or `sudo setcap cap_sys_ptrace=eip $(which py-spy)` (one-time)
 - Or use Python's built-in `faulthandler.dump_traceback_later()` proactively in
   long-running scripts to dump every N seconds without external attach
+
+## TCBM vs Adam final-eval target asymmetry (Day 6 SI must disclose)
+
+**Discovered**: Day 3 Adam baseline writing
+**Status**: Accepted as algorithmic difference, not bug
+
+**TCBM (run_gradient_baseline_v2.py)**:
+- Final eval target = best_x (the θ from the replica with lowest single-shot cost)
+- This selection bias is intrinsic to PT: best replica's θ is what algorithm "picks"
+- Mitigated by N evaluations averaged at the final stage (NQS-1e debiasing)
+
+**Adam (run_adam_baseline.py)**:
+- Final eval target = final θ (from last step of optimization)
+- Adam assumes monotonic convergence; selection bias would inflate apparent performance
+- Final eval = 4-shot mean (no NQS-1e equivalent)
+
+**Why not unified?**:
+PT (M=12) needs replica selection by construction; Adam (M=1) doesn't have replicas
+to select among. Forcing both to "final θ" hides PT's actual algorithmic output.
+Forcing both to "best across noisy replicas" introduces selection bias on Adam.
+
+**Day 6 paper SI must disclose this asymmetry** in the methods section, alongside
+final-eval statistic (both = mean of 4 evaluations).
+
+**Reference for handling**: Bukov 2021 reports final E from "lowest E across multiple
+seeds at fixed config" (Section 7.1 plateau ≈ -0.5019), implying selection-by-cost
+across runs is field standard for PT-like methods.
