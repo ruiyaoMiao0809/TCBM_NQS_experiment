@@ -102,7 +102,7 @@ and n_vmc_samples=None exactly reproduces NN v5 behaviour.
 import time
 import math
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Tuple, List, Union
+from typing import Optional, Dict, Tuple, List, Union, Callable
 
 import numpy as np
 import torch
@@ -912,7 +912,11 @@ class TCBMOptimizer:
     # Main optimize loop
     # ─────────────────────────────────────────────────────────────────────────
 
-    def optimize(self) -> Dict:
+    def optimize(
+        self,
+        callback: Optional[Callable[[int, Dict[str, float]], None]] = None,
+        callback_every: int = 100,
+    ) -> Dict:
         """
         Main TCBM NQS optimization loop.
 
@@ -921,6 +925,13 @@ class TCBMOptimizer:
           • best_cost_raw          (original best observation)
           • subspace_source_diag   (NQS-3 mode diagnostics)
           • final_sigma_E          (σ_E at termination)
+
+        Optional progress hook:
+          callback(step, info_dict) is called every callback_every steps
+          (and at step 0). info_dict contains read-only snapshot floats:
+            cost_min, cost_mean, sigma_E_max, sigma_E_mean,
+            swap_acc_recent, subspace_active, psi_max, T_w_step.
+          callback failures are caught and warned, never abort optimize().
         """
         cfg  = self.config
         D    = self.D
@@ -1093,6 +1104,28 @@ class TCBMOptimizer:
                 traj['sigma_E'].append(float(stds.mean()))
 
                 sigma_history.append((step, float(stds.mean()), float(stds.max())))
+
+            # ── Optional progress callback (NQS-Day3) ─────────────────────
+            # Read-only snapshot. Callback failures must not abort the run.
+            if callback is not None and step % callback_every == 0:
+                try:
+                    psi_max_so_far = max((p for _, p in psi_history), default=0.0)
+                    callback(step, {
+                        'cost_min':         float(energies.min().item()),
+                        'cost_mean':        float(energies.mean().item()),
+                        'sigma_E_max':      float(stds.max().item()),
+                        'sigma_E_mean':     float(stds.mean().item()),
+                        'swap_acc_recent':  float(swap_acc_last),
+                        'subspace_active':  bool(belief_mature),
+                        'psi_max':          float(psi_max_so_far),
+                        'T_w_step':         step_T_w,
+                    })
+                except Exception as _cb_err:
+                    import warnings
+                    warnings.warn(
+                        f"callback at step {step} raised "
+                        f"{type(_cb_err).__name__}: {_cb_err}"
+                    )
 
             energy_prev = energies.clone()
 
