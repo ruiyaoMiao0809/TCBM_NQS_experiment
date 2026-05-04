@@ -88,16 +88,7 @@ See `environment.yml` for full spec.
 
 ## Citation (for papers that use this codebase)
 
-```bibtex
-@article{tcbm_nqs_2026,
-  author = {[Nick] and Xiong, Hui},
-  title = {Tunneling with Conviction: TCBM on Neural-Network Quantum States
-           (Proof of Concept)},
-  year = {2026},
-  note = {Supplementary Information for Nature Machine Intelligence submission}
-}
-```
+
 
 ## Contact
 
-Nick · HKUST(GZ) · Xiong Lab
