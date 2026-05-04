@@ -154,6 +154,7 @@ def main():
 
     DEVICE = os.environ.get('TCBM_DEVICE', 'cuda:0')
     problem = J1J2Problem(Lx=4, Ly=4, alpha=2, J1=1.0, J2=0.5, device=DEVICE)
+    problem.set_seed(42)
     print(f"Using device: {DEVICE} (set TCBM_DEVICE env var to override)")
     print(f"Problem: 4x4 J1-J2 PBC, J2/J1=0.5, D_params={problem.dim} (RBM α=2 real params)")
 

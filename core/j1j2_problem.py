@@ -330,6 +330,16 @@ class J1J2Problem:
         self.box_constraint = False    # do NOT clamp θ to [0, 1] in Langevin
         self.clamp_dims = self.dim     # clamping applies to all D params
 
+    def set_seed(self, seed: int) -> "J1J2Problem":
+        """Reset internal RNG to ``seed`` for reproducible sampling.
+
+        Call after construction (and before random_feasible/evaluate) when
+        running multi-seed sweeps; module-level torch.manual_seed does NOT
+        affect ``self._gen``. Returns self for fluent chaining.
+        """
+        self._gen.manual_seed(seed)
+        return self
+
     # ─────────────────────────────────────────────────────────────────────
     # Interface required by TCBMOptimizer
     # ─────────────────────────────────────────────────────────────────────
