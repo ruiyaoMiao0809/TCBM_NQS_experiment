@@ -125,6 +125,10 @@ Add to existing list:
 
 ## Open questions for Nick
 
+*Note: Original Q2 (cosine threshold 0.3) is resolved by Change 2's calibration
+procedure (Day 7 random null calibration determines threshold). Numbering
+adjusted from v2-style 1/2/3/4 → 1/2/3 in v3 outline.*
+
 1. **n_kept threshold (5 of 20)**: arbitrary cutoff, sensitivity analysis needed Day 8+
 2. **rel_err_TCBM / rel_err_SR ≤ 2.0**: 2× headroom is generous; if Bukov 4×4 SR achieves 0.1% then 2× = 0.2% rel_err, much tighter than 10% absolute. Worth re-evaluating once SR baseline number is in.
 3. **Adam ablation**: RESOLVED — keep, reduce to 5 seeds (was 15 in v2).
@@ -136,20 +140,55 @@ Add to existing list:
 
 ## Workflow implications
 
-**Day 5** (was: TCBM tuning):
-- Now: implement `core/sr_optimizer.py` (4 helpers + SROptimizer.optimize)
-- Pytest: SR ground state on 2×2 J1-J2 within 5% of ED truth (cheap correctness check)
+**Pre-Day 4 cleanup (Day 3 evening, completed)**:
+- RNG bug discovered + fixed (commit 18716b3): J1J2Problem.set_seed() method added
+- All production scripts (run_adam_baseline.py, run_gradient_baseline_v2.py) updated
+- 23 tests pass including 3 new RNG seeding tests
+- v2 Adam diagnostic launched with proper seeding (running, ETA 19:14 UTC)
 
-**Day 6** (was: TCBM run):
-- Now: run_sr_baseline.py single-seed; verify rel_err ≤ 1% (Bukov-anchored)
-- If rel_err > 5%: SR impl bug, fix before any TCBM comparison
+All Day 4+ work assumes RNG-fixed codebase. v3 thresholds (σ_TCBM/σ_SR ≤ 0.5)
+are now actually measurable.
 
-**Day 7-9** (was: TCBM rerun + variants):
-- Add: subspace overlap analyzer
-- Add: TCBM-hybrid mode wired to record subspace evolution
+**Day 4 morning** (after v2 Adam verdict):
+- Decision: 4×4 vs 6×6 path (based on Adam multi-basin signal)
+- Decision: full v3 doc draft start (if Adam shows ruggedness)
+- Launch production v2 TCBM-gradient (RNG-fixed)
 
-**Day 17-19** (was: 15-seed Adam sweep + 15-seed TCBM sweep):
-- Now: 15-seed SR sweep + 15-seed TCBM sweep + 5-seed Adam ablation (60% of original cost since Adam dropped from 15 to 5)
+**Day 4 evening** (assumes Plan A path):
+- Write full v3 doc (203-line outline → 800+ line doc)
+- v3 doc supersedes v2 NQS_J1J2_Prediction_v2.md
+
+**Day 5** (Plan A):
+- implement core/sr_optimizer.py (skeleton already exists, F1 forward work)
+- 4 helpers + SROptimizer class implementation
+- Pytest: SR ground state on 2×2 J1-J2 within 5% of ED truth
+
+**Day 6** (Plan A):
+- run_sr_baseline.py single-seed; verify rel_err ≤ 1% (Bukov-anchored)
+- If rel_err > 5%: SR impl bug, fix Day 7 morning
+- Day 6 SI prep: literature search for "reliability over accuracy" citation
+
+**Day 7** (Plan A decision point at 16:00):
+- If SR rel_err < 5% on 4×4: continue Plan A, build subspace overlap analyzer
+- If SR rel_err > 5% on 4×4: trigger Plan B (NetKet fork)
+- Random null calibration for n_kept threshold (Step 1-2 of Change 2)
+
+**Day 7-9** (Plan A continued):
+- Subspace overlap analyzer + TCBM-hybrid mode wired to record subspace evolution
+- TCBM-gradient retry with RNG fix (production v2)
+
+**Plan B alternate path** (Day 8-12 if triggered):
+- Day 8: install NetKet, fork Examples/HeisenbergJ1J2/heisenbergJ1J2.py
+- Day 9: adapt L=4, J2=0.5, run baseline in jax
+- Day 10: extract data, compare with PyTorch TCBM
+- Day 11-12: subspace overlap with NetKet SR data
+- Schedule slips to Day 22-24, paper submission deadline tight
+
+**Day 17-19** (assumes Plan A success):
+- 15-seed SR sweep + 15-seed TCBM sweep + 5-seed Adam ablation
+- (60% of original cost since Adam dropped from 15 to 5)
+
+**Day 20-21** (final): SI writing + paper review buffer.
 
 ---
 
