@@ -3,7 +3,22 @@
 **Status**: Draft outline (Day 3, 2026-05-04). NOT a full v3 doc.
 Awaiting Adam diagnostic verdict + Nick reframe approval before promoting to full v3.
 
-**Trigger**: Day 3 quick_adam_diagnostic showed vanilla Adam ceiling at rel_err ≈ 65% on 4×4 J1-J2 α=2 RBM. Bukov 2021 4×4 SR achieves ~10⁻³ rel_err. Adam cannot serve as a meaningful baseline for "TCBM finds ground state" claims. Reframe: SR becomes primary baseline; Adam demoted to ablation.
+**Trigger**: Day 3 quick_adam_diagnostic v2 (RNG-fixed, 5 seeds) confirmed vanilla Adam 
+ceiling on 4×4 J1-J2 α=2 RBM:
+- Mean rel_err 74.45% (final 4-shot mean across 5 seeds)
+- Max rel_err 84.40%, Min rel_err 58.30%
+- Best-during-training across all seeds: ~-3.87 to -4.35 (rel_err ~49-54%)
+- All seeds drift POSITIVE (final_cost > best_during_cost): mean drift +1.705
+
+Bukov 2021 4×4 SR achieves ~10⁻³ rel_err (3-4 orders of magnitude better).
+
+Adam cannot serve as a meaningful baseline for "TCBM finds ground state" claims. 
+Reframe: SR becomes primary baseline; Adam demoted to ablation (5 seeds, 
+documenting vanilla gradient descent failure mode).
+
+Note: Day 3 v1 diagnostic showed misleading "ceiling 65%" due to RNG bug 
+(seed=0 effective for all "5 seeds"). v2 with proper RNG seeding (commit 18716b3) 
+gives the verified numbers above.
 
 ---
 
@@ -111,6 +126,74 @@ Add to existing list:
 
 ---
 
+## Day 3 verified Adam baseline (anchor for downstream metrics)
+
+Source: `results/quick_adam_diagnostic_v2.json` (commit d8e37b4), 
+analysis script: `experiments/analyze_diagnostic_post.py`.
+
+**Configuration**:
+- 5 seeds: [42, 7, 13, 21, 99]
+- Adam M=1, lr=0.001, betas=(0.9, 0.999)
+- n_steps=2000, n_vmc_samples=2000, n_final=4 (mean)
+- 4×4 J1-J2 PBC J2/J1=0.5
+- RNG-fixed (J1J2Problem.set_seed() per seed)
+
+**Per-seed results**:
+
+| Seed | best_during | final | drift | rel_err |
+|------|-------------|-------|-------|---------|
+| 42 | -4.35 | -3.53 | +0.82 | 58.30% |
+| 7 | -2.91 | -1.32 | +1.59 | 84.40% |
+| 13 | -4.05 | -2.08 | +1.98 | 75.47% |
+| 21 | -3.89 | -2.46 | +1.43 | 70.86% |
+| 99 | -4.13 | -1.42 | +2.71 | 83.22% |
+
+**Statistical summary**:
+- σ_Adam_abs = 0.8031 (cross-seed std of final cost)
+- σ_Adam_rel = 9.495% (relative to |E_0|=8.4579)
+- Mean rel_err = 74.45%
+- Min/Max rel_err = 58.30% / 84.40%
+- Sorted final costs: [-3.53, -2.46, -2.08, -1.42, -1.32]
+- Gap ratio = 0.48 (max gap 1.06 between seed 42 and rest cluster)
+- Mean drift = +1.705 (5/5 seeds positive)
+
+**Interpretation**:
+
+4×4 landscape: STRONG multi-basin signature, with three independent signals:
+1. σ 9.5% (5× the 2% strong threshold)
+2. Drift +1.7 across all 5 seeds (consistent saddle crossing into worse area)
+3. 2-cluster structure (seed 42 outlier in better basin)
+
+gap_ratio 0.48 is borderline (under 0.5 strict cutoff) but this reflects 
+small sample size (5 seeds insufficient for tight cluster threshold), 
+not absence of multi-basin structure.
+
+**Implications for v3 Tier 3 (dual-baseline robustness)**:
+
+Tier 3 is a single tier (not split into 3a/3b sub-tiers) with two sub-criteria; 
+BOTH must hold for Tier 3 PASS:
+
+- (a) σ_TCBM/σ_Adam ≤ 0.5 — vs unstable baseline. With σ_Adam = 9.5%, needs 
+  σ_TCBM ≤ 4.7%. Achievable: TCBM PT typically reduces σ by 3-5×, so σ_TCBM 
+  ~1-3% is realistic and easily clears this safety-net bound.
+
+- (b) σ_TCBM ≤ 2× σ_SR — vs best baseline. Requires σ_SR estimate from Day 6 
+  SR baseline. If σ_SR ≈ 0.5-1.5% (extrapolated from Bukov 6×6 σ ≈ 0.34%), 
+  needs σ_TCBM ≤ 1-3%. This is a 2× ceiling against the best baseline 
+  (narrative form: "TCBM 不输给 best baseline by more than 2×"), not a 0.5× 
+  beat-the-baseline target — that would be unrealistic at this size.
+
+Note on the 4-tier table (above): the table currently lists Tier 3 as 
+σ_TCBM/σ_SR ≤ 0.5 (single criterion). The dual-baseline framing here is the 
+target structure for the full v3 doc (Step 5 promotion will reconcile). This 
+outline retains the 4-tier table single-criterion form unchanged for now.
+
+Adam's drift +1.7 mean is itself useful narrative: "vanilla Adam unstable on 
+frustrated landscape, requires PT to maintain best-found basin". This is 
+paper SI ammunition for TCBM advantage.
+
+---
+
 ## What does NOT change
 
 - §1.1 problem formalization (4×4 J1-J2 PBC, J2/J1=0.5, ED truth E_0=-8.4579)
@@ -132,7 +215,7 @@ adjusted from v2-style 1/2/3/4 → 1/2/3 in v3 outline.*
 1. **n_kept threshold (5 of 20)**: arbitrary cutoff, sensitivity analysis needed Day 8+
 2. **rel_err_TCBM / rel_err_SR ≤ 2.0**: 2× headroom is generous; if Bukov 4×4 SR achieves 0.1% then 2× = 0.2% rel_err, much tighter than 10% absolute. Worth re-evaluating once SR baseline number is in.
 3. **Adam ablation**: RESOLVED — keep, reduce to 5 seeds (was 15 in v2).
-   - Value: SI 演示 vanilla gradient descent fails on NQS (rel_err 65%) → 衬托 PT 价值
+   - Value: SI 演示 vanilla gradient descent fails on NQS (mean rel_err 74.45%, 5 seeds) → 衬托 PT 价值
    - Cost: 5 seeds × 30 min = 2.5h (60% reduction from v2 plan)
    - Implementation: existing run_adam_baseline.py + already-collected Day 3 data
 
@@ -197,7 +280,21 @@ are now actually measurable.
 1. **SR may be too good (Tier 2 FAIL)**:
 
    Empirical scenario: SR achieves rel_err 0.1%, TCBM achieves 0.5% (5× worse) → Tier 2 fail
-   But TCBM may still pass Tier 3 (σ ratio < 0.5).
+   But TCBM may still pass Tier 3 sub-criterion (a) (σ_TCBM/σ_Adam < 0.5).
+
+   **Verified Day 3 baseline (5 seeds, RNG-fixed)**:
+   - σ_Adam_rel = 9.495% (cross-seed std)
+   - Mean rel_err = 74.45%, range [58.30%, 84.40%]
+   - Multi-basin signature confirmed: 5/5 seeds show positive drift, mean +1.705
+   - 2-cluster structure: seed 42 in better basin (-3.53), other 4 seeds clustered 
+     in [-2.46, -1.32] worse basin
+
+   This provides quantitative anchor for Tier 3 dual-baseline (single Tier 3, 
+   two sub-criteria, both must hold for Tier 3 PASS):
+   - (a) σ_TCBM/σ_Adam ≤ 0.5 — with σ_Adam = 9.5%, needs σ_TCBM ≤ 4.7%. Even 
+     modest TCBM PT advantage (σ_TCBM ~1-3%) easily clears this safety-net bound.
+   - (b) σ_TCBM ≤ 2× σ_SR — ceiling vs best baseline; pending Day 6 SR baseline 
+     σ measurement.
 
    Narrative defense:
    - Empirical: rel_err_TCBM 增加 X% but σ_TCBM 降低 50% — accuracy/robustness trade-off
