@@ -101,13 +101,13 @@ ED ground state: E_0 = -8.4579 (4×4 J1-J2 J2/J1=0.5, S_z=0 sector dim 12,870)
 
 详见上文。Day 4 v3 doc 写作按 STRONG 处理，但 daily_log 必须明确记下分歧来源 (gap_ratio 0.5 strict cutoff vs 5-seed 采样不足)，Day 7 random null calibration 完成后用 50 pairs 数据回头验证这个判断。
 
-### 3.3 Dual-baseline robustness option (Tier 3 拆分)
+### 3.3 Dual-baseline robustness option (Tier 3 dual-baseline single-tier)
 
-Adam v2 verdict 出来后浮现一个 narrative 选项：Tier 3 不必单押 σ_TCBM/σ_SR ≤ 0.5 (high risk, Bukov 6×6 SR σ ≈ 0.34% 是 challenging benchmark)，可拆成:
-- Tier 3a: σ_TCBM/σ_Adam ≤ 0.5 — easily achievable (predicted σ_TCBM ~1-3% vs σ_Adam = 9.5%), 安全垫 claim
-- Tier 3b: σ_TCBM/σ_SR ≤ 2.0 — challenging (4×4 σ_SR 预期 0.5-1.5%), narrative ceiling
+Adam v2 verdict 出来后浮现一个 narrative 选项：Tier 3 不必单押 σ_TCBM/σ_SR ≤ 0.5 (high risk, Bukov 6×6 SR σ ≈ 0.34% 是 challenging benchmark)，可表述为 single Tier 3 with two sub-criteria (both must hold for Tier 3 PASS):
+- (a) σ_TCBM/σ_Adam ≤ 0.5 — easily achievable (predicted σ_TCBM ~1-3% vs σ_Adam = 9.5%), 安全垫 claim
+- (b) σ_TCBM ≤ 2× σ_SR — challenging if σ_SR small (Bukov 6×6 ≈0.34%); well-defined even if σ_SR → 0 (multiplicative form avoids division-by-zero relative to σ_TCBM/σ_SR ≤ 2.0 form)
 
-合起来读: "TCBM 显著好于 unstable baseline 且不输给 best baseline"，比单 Tier 3 少一个 R-abort 风险面。Day 4 早上 Nick 拍板采纳此结构。Day 4 下午 v3 doc Step 5 §1.2 success criteria table 改成 5-row。
+合起来读: "TCBM 显著好于 unstable baseline 且不输给 best baseline"，比单 Tier 3 少一个 R-abort 风险面。Day 4 早上 Nick 确认 Tier 3 dual-baseline single-tier 结构 (sub-criteria (a) σ_TCBM/σ_Adam ≤ 0.5 AND (b) σ_TCBM ≤ 2× σ_SR, both must hold for Tier 3 PASS)。
 
 ---
 
@@ -117,11 +117,11 @@ Adam v2 verdict 出来后浮现一个 narrative 选项：Tier 3 不必单押 σ_
 |---------|------|------|
 | R-abort-1 (rel_err > 15% vs ED) | inconclusive | 等 Day 4 production v2 |
 | R-abort-2 (swap_acc < 0.1 or > 0.9) | pending | 等 Day 4 production v2 |
-| R-abort-3a (σ_TCBM/σ_Adam > 0.8) | pending | 等 Day 12-13 sweep |
-| R-abort-3b (σ_TCBM/σ_SR > 0.8) | pending | 等 Day 12-13 sweep, SR 数据 Day 6+ |
+| R-abort-3 sub-criterion (a) (σ_TCBM/σ_Adam > 0.8) | pending | 等 Day 12-13 sweep |
+| R-abort-3 sub-criterion (b) (σ_TCBM/σ_SR > 0.8) | pending | 等 Day 12-13 sweep, SR 数据 Day 6+ |
 | R-abort-5 (n_kept < 3) | pending | 等 Day 8 hybrid 测量 |
 
-Day 4 evening verdict 唯一可执行的红线是 R-abort-1 + R-abort-2 + 发散/NaN watchdog。Tier 3a/3b 整段判断 deferred 到 Day 6+。
+Day 4 evening verdict 唯一可执行的红线是 R-abort-1 + R-abort-2 + 发散/NaN watchdog。Tier 3 sub-criteria (a)+(b) 整段判断 deferred 到 Day 6+。
 
 ---
 
@@ -158,7 +158,7 @@ v2 outline 的 contingency 写得 vague ("if SR fails")，Day 3 reframe 时发�
 - v2: Adam STRONG multi-basin (4×4 retained, no 6×6 pivot needed)
 - v2 同时确认: Adam **不是** SR-level 的 meaningful baseline (Bukov 4×4 SR ~10⁻³ vs Adam 58%-84%)
 
-最终 narrative: Adam 作为 secondary unstable baseline (Tier 3a 的对照, 5 seeds ablation)，SR 作为 primary best baseline (Tier 2 + Tier 3b 的对照)。这是 Adam → SR reframe 的本质——不是 Adam 被淘汰，而是定位从 primary 改成 secondary。
+最终 narrative: Adam 作为 secondary unstable baseline (Tier 3 sub-criterion (a) 的对照, 5 seeds ablation)，SR 作为 primary best baseline (Tier 2 + Tier 3 sub-criterion (b) 的对照)。这是 Adam → SR reframe 的本质——不是 Adam 被淘汰，而是定位从 primary 改成 secondary。
 
 教训: **baseline 的定位 (primary/secondary/ablation) 应在 outline 阶段 explicit 写清，避免 reframe 时被误读为 "kill baseline"**。
 
@@ -169,11 +169,11 @@ v2 outline 的 contingency 写得 vague ("if SR fails")，Day 3 reframe 时发�
 详见 `docs/NQS_experiment_plan.md` Day 4 section + Step 1-9 detailed breakdown (本次 chat session 内已对齐)。关键交接点:
 
 1. **Step 4** v3 outline Adam ceiling 数字: 65% → 74.45% (mean rel_err) / 58.30% (min rel_err)
-2. **Step 5** full v3 doc 用 5-tier 结构 (Tier 3 拆 3a/3b)
+2. **Step 5** full v3 doc 用 4-tier 结构 (Tier 3 dual-baseline single-tier with sub-criteria (a)+(b))
 3. **Step 5** 新加 §11 disclosure items: TCBM best_x vs Adam/SR final_θ asymmetry
 4. **Step 5** Bukov 数字直接从 `docs/bukov_2021_anchor.md` 引用，不凭记忆复述
 5. **Step 6** production v2 launch on GPU 3 (22515 MB free, 0% util, 已确认)
-6. **Step 8** Day 4 evening verdict 仅评估 Tier 1 + R-abort-2，Tier 3a/3b deferred 到 Day 6+
+6. **Step 8** Day 4 evening verdict 仅评估 Tier 1 + R-abort-2，Tier 3 sub-criteria (a)+(b) deferred 到 Day 6+
 
 ---
 
