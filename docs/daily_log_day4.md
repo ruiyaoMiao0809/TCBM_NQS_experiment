@@ -244,6 +244,31 @@ Day 5 工作内容**完全重写**。原计划 SR core implementation + pytest �
 
 ---
 
+## 6.4 CRITICAL: Phase 3 launch 必须挂 tmux
+
+Day 5 Phase 3 production v2 重跑 (5-6h wall) 必须在 tmux session 里 launch:
+
+```bash
+tmux new -s prod_v2_day5 -d
+tmux send-keys -t prod_v2_day5 'conda activate tcbm_nqs && cd /home/dglg/miao_workplace/tcbm_nqs' Enter
+tmux send-keys -t prod_v2_day5 'TCBM_DEVICE=cuda:3 python -u experiments/run_gradient_baseline_v2.py 2>&1 | tee logs/prod_v2_day5_seed42_$(date +%Y%m%d_%H%M).log' Enter
+```
+
+理由:
+- SSH disconnect / 笔记本 sleep / 网络中断都不影响 tmux session 内进程
+- attach 看进度: `tmux attach -t prod_v2_day5` (detach: Ctrl-b 然后 d, NOT Ctrl-c)
+- session 名带 day5 后缀避免和 Day 4 的 prod_v2 (已 dead) session 名冲突
+- 命令包含 `conda activate tcbm_nqs` 显式激活 env (符合项目 convention)
+
+检查清单 (Phase 3 launch 前):
+- [ ] Phase 1 atexit fix verified (pytest test_explicit_save_on_sigterm 通过)
+- [ ] Phase 2 NaN fix verified (results/state_at_first_nan.pt load + backward give finite grad, pytest test_log_2cosh_no_nan_at_singularity 通过)
+- [ ] tests 全 pass (Phase 1 + 2 新 test 加上去 ~25-26 tests)
+- [ ] GPU 3 free ≥ 22 GB (nvidia-smi 确认)
+- [ ] 上面 3 行 tmux 命令准备好, ready to paste
+
+---
+
 ## 7. Day 4 commit handoff
 
 **待 commit (Day 4 closing batch)**:
