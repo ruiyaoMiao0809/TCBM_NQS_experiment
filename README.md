@@ -38,6 +38,19 @@ python utils/ed_reference.py --J2 0.5
 bash scripts/day7_t4a_gate.sh
 ```
 
+## Working with this project
+
+Always activate the project conda env first:
+
+```bash
+conda activate tcbm_nqs
+```
+
+All commands (pytest, python, experiment launches) assume this env is active.
+`tcbm_nqs` has all required deps (torch 2.7.1+cu118, pytest 9.0.3, etc).
+The default login env (`tcbm`) does NOT have pytest installed, so direct
+pytest calls in `tcbm` will fail.
+
 ## Project Structure
 
 ```
