@@ -3,6 +3,11 @@ experiments/run_sr_baseline.py
 ================================
 Day 6+ Stochastic Reconfiguration (SR) baseline for TCBM-NQS POC.
 
+TODO Day 6: When implementing optimize loop, add robustness handlers from
+core.robustness (install_robustness_handlers + make_periodic_checkpoint_callback +
+make_anomaly_detection_callback). See experiments/run_gradient_baseline_v2.py for
+the canonical pattern.
+
 PRIMARY baseline (replaces Adam in Prediction v3). Adam baseline is now
 demoted to an ablation only -- vanilla Adam without natural-gradient
 preconditioning cannot find the J1-J2 ground state (Day 3 diagnostic

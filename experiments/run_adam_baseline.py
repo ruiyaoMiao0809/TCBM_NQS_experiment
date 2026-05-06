@@ -45,6 +45,11 @@ sys.stdout.reconfigure(line_buffering=True)
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from core.j1j2_problem import J1J2Problem
+from core.robustness import (
+    install_robustness_handlers,
+    make_periodic_checkpoint_callback,
+    make_anomaly_detection_callback,
+)
 
 E_0_TRUTH = -8.4579
 P0_THRESHOLD = 0.10
@@ -70,44 +75,6 @@ _state: Dict[str, Any] = {
     'start_time': None,
     'completed': False,
 }
-
-
-def dump_state(path: Path, label: str) -> None:
-    """Idempotent snapshot of _state to JSON. Safe from any context."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    snapshot = dict(_state)
-    snapshot['dump_label'] = label
-    snapshot['dump_time'] = time.strftime('%Y-%m-%d %H:%M:%S')
-    if _state['start_time'] is not None:
-        snapshot['elapsed_seconds'] = time.time() - _state['start_time']
-    try:
-        with open(path, 'w') as f:
-            json.dump(snapshot, f, indent=2, default=str)
-        print(f"[{label}] dumped state to {path} (step={_state['last_step']})", flush=True)
-    except Exception as e:
-        print(f"[{label}] FAILED to dump: {type(e).__name__}: {e}", flush=True)
-
-
-def _sigterm_handler(signum, frame):
-    print(
-        f"\n[SIGTERM received at step {_state['last_step']}, attempting graceful exit]",
-        flush=True,
-    )
-    sys.exit(0)
-
-
-def _atexit_dump():
-    if _state['completed']:
-        return
-    if _state['last_step'] == 0 and _state['start_time'] is None:
-        return
-    print("\n[atexit] dumping partial state due to interrupted exit", flush=True)
-    dump_state(FINAL_PATH.with_suffix('.partial.json'), 'atexit_partial')
-
-
-# Register at module load (before main()).
-signal.signal(signal.SIGTERM, _sigterm_handler)
-atexit.register(_atexit_dump)
 
 
 def main():
@@ -144,12 +111,19 @@ def main():
     theta = problem.random_feasible(1).requires_grad_(True)
     optimizer = torch.optim.Adam([theta], lr=LR, betas=BETAS)
 
+    # Day 5 Phase 1: 3-layer robustness (Issue 6 atexit defect workaround).
+    install_robustness_handlers(_state, output_dir='results', run_name='adam_baseline_seed42')
+    periodic_cb = make_periodic_checkpoint_callback(_state, every_n=CHECKPOINT_EVERY)
+    anomaly_cb = make_anomaly_detection_callback(_state)
+
     # Main loop
     for step in range(N_STEPS):
         optimizer.zero_grad()
         cost, penalty, sigma_E = problem.evaluate(theta, n_samples=N_VMC_SAMPLES)
         loss = (cost + penalty).sum()
         loss.backward()
+
+        is_grad_nan = bool(torch.isnan(theta.grad).any().item()) if theta.grad is not None else False
         optimizer.step()
 
         cost_val = float(cost.detach().item())
@@ -171,8 +145,14 @@ def main():
                 flush=True,
             )
 
-        if step > 0 and step % CHECKPOINT_EVERY == 0:
-            dump_state(CHECKPOINT_PATH, f'checkpoint_step{step}')
+        info = {
+            'cost_min': cost_val,
+            'cost_mean': cost_val,
+            'sigma_E_max': sigma_val,
+            'is_grad_nan': is_grad_nan,
+        }
+        periodic_cb(step, info)
+        anomaly_cb(step, info)
 
     # Final eval: N_FINAL_AVERAGES fresh evaluations of the *final* theta.
     # Mean (not min) for unbiased comparison with TCBM's NQS-1e debiasing,
