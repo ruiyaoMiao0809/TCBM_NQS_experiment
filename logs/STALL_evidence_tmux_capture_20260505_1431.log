@@ -1,0 +1,37 @@
+TCBM_DEVICE=cuda:3 python -u experiments/run_gradient_baseline_v2.py 2>&1 | tee logs/production_
+v2_seed42_20260505_1145.log
+(base) dglg@dgut:~/miao_workplace/tcbm_nqs$ TCBM_DEVICE=cuda:3 python -u experiments/run_gradien
+t_baseline_v2.py 2>&1 | tee logs/production_v2_seed42_20260505_1145.log
+Using device: cuda:3 (set TCBM_DEVICE env var to override)
+Problem: 4x4 J1-J2 PBC, J2/J1=0.5, D_params=1120 (RBM α=2 real params)
+
+Config: M=12, n_steps=3000, k=20
+  n_vmc_samples_final=2 (Day 3 reduced from 4)
+  subspace_warmup=150, freq=80
+  expected ~35 SVD updates total
+  psi_star=1.5 (T_w trigger threshold)
+
+Target: |E - -8.4579| / 8.4579 < 10%
+Abort:  > 15%
+Expected wall: 4.5-5.5h (run benchmark_per_step.py first to confirm)
+Progress prints every 100 steps
+Hard checkpoints every 500 steps to results/baseline_v2_checkpoint.json
+======================================================================
+
+[step    0] cost_min=10.9770 cost_mean=11.8056 sigma_E_max=0.0468 swap_acc=1.000 psi_max=0.000 s
+ubspace=off
+[step  100] cost_min=-1.6900 cost_mean=3.6852 sigma_E_max=0.0769 swap_acc=1.000 psi_max=0.000 su
+bspace=off
+/home/dglg/miao_workplace/tcbm_nqs/core/tcbm_optimizer_NQS.py:448: UserWarning: torch.linalg.svd
+: During SVD computation with the selected cusolver driver, batches 0 failed to converge. A more
+ accurate method will be used to compute the SVD as a fallback. Check doc at https://pytorch.org
+/docs/stable/generated/torch.linalg.svd.html (Triggered internally at /pytorch/aten/src/ATen/nat
+ive/cuda/linalg/BatchLinearAlgebraLib.cpp:701.)
+  _, S, Vh = torch.linalg.svd(G_c, full_matrices=False)
+[step  200] cost_min=-1.6900 cost_mean=3.6852 sigma_E_max=0.0769 swap_acc=0.727 psi_max=0.000 su
+bspace=off
+[step  300] cost_min=-1.6900 cost_mean=3.6852 sigma_E_max=0.0769 swap_acc=0.545 psi_max=0.000 su
+bspace=off
+[step  400] cost_min=-1.6900 cost_mean=3.6852 sigma_E_max=0.0769 swap_acc=0.455 psi_max=0.000 su
+bspace=off
+^C(base) dglg@dgut:~/miao_workplace/tcbm_nqs$

@@ -1,0 +1,99 @@
+{
+  "step": 87,
+  "nan_replica_idx": 5,
+  "result": {
+    "label": "narrow_band_step87_replica5",
+    "theta_norm": 6.214552879333496,
+    "eval_seconds": 10.913988828659058,
+    "cost_stats": {
+      "name": "cost (after evaluate)",
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "numel": 1,
+      "min": -1.3828136920928955,
+      "max": -1.3828136920928955,
+      "abs_max": 1.3828136920928955,
+      "all_finite": true,
+      "n_inf": 0,
+      "n_nan": 0
+    },
+    "pen_stats": {
+      "name": "pen (after evaluate)",
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "numel": 1,
+      "min": 0.0,
+      "max": 0.0,
+      "abs_max": 0.0,
+      "all_finite": true,
+      "n_inf": 0,
+      "n_nan": 0
+    },
+    "std_stats": {
+      "name": "std (after evaluate)",
+      "shape": [
+        1
+      ],
+      "dtype": "torch.float32",
+      "numel": 1,
+      "min": 0.03218817338347435,
+      "max": 0.03218817338347435,
+      "abs_max": 0.03218817338347435,
+      "all_finite": true,
+      "n_inf": 0,
+      "n_nan": 0
+    },
+    "total_stats": {
+      "name": "total = (cost+pen).sum()",
+      "shape": [],
+      "dtype": "torch.float32",
+      "numel": 1,
+      "min": -1.3828136920928955,
+      "max": -1.3828136920928955,
+      "abs_max": 1.3828136920928955,
+      "all_finite": true,
+      "n_inf": 0,
+      "n_nan": 0
+    },
+    "grad_stats": {
+      "name": "d(total)/d(theta)",
+      "shape": [
+        1,
+        1120
+      ],
+      "dtype": "torch.float32",
+      "numel": 1120,
+      "min": NaN,
+      "max": NaN,
+      "abs_max": NaN,
+      "all_finite": false,
+      "n_inf": 0,
+      "n_nan": 34
+    },
+    "grad_failed": false,
+    "first_non_finite_intermediate": {
+      "point": "log_2cosh.log(inner)",
+      "call_index": 1007,
+      "tensor_stats": {
+        "name": "log_2cosh.log(inner)",
+        "shape": [
+          2000,
+          32
+        ],
+        "dtype": "torch.float32",
+        "numel": 64000,
+        "min": -Infinity,
+        "max": 1.3522577285766602,
+        "abs_max": Infinity,
+        "all_finite": false,
+        "n_inf": 1,
+        "n_nan": 0
+      }
+    },
+    "n_intermediates_captured": 26625
+  }
+}
