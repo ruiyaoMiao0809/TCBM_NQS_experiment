@@ -149,9 +149,16 @@ def log_psi_rbm(theta: torch.Tensor, sigma: torch.Tensor, N: int, M: int) -> tor
     return v_contrib + h_contrib
 
 
-def _log_2cosh_complex(z: torch.Tensor) -> torch.Tensor:
+def _log_2cosh_complex_native(z: torch.Tensor) -> torch.Tensor:
     """
-    Stable log(2·cosh(z)) for complex z = u + iv.
+    Stable log(2·cosh(z)) for complex z = u + iv. RAW form — call sites should use
+    `_log_2cosh_complex` (the safe public wrapper) instead, which routes through
+    `_SafeLog2CoshComplex.apply()` to handle the inner=0 singularity in backward.
+
+    NaN at inner=0 (z = i·(π/2 + k·π)) is correct analytic behavior here in
+    forward (cosh(z)=0 → ψ=0), but PyTorch native autograd produces 1/inner = inf
+    in backward, which propagates to NaN gradients. See Issue 5 in
+    docs/known_issues_day2.md and Day 4 diagnostic trail.
 
     Returns the natural quantity for RBM hidden activations (Carleo-Troyer 2017
     convention; see also NetKet log_cosh implementation), where each hidden
@@ -228,6 +235,68 @@ def _log_2cosh_complex(z: torch.Tensor) -> torch.Tensor:
     log_magnitude = abs_u + 0.5 * torch.log(inner)
     phase = torch.atan2(torch.tanh(u) * torch.sin(v), torch.cos(v))
     return torch.complex(log_magnitude, phase)
+
+
+class _SafeLog2CoshComplex(torch.autograd.Function):
+    """
+    Numerically safe wrapper for log(2·cosh(z)) on complex z.
+
+    Forward path: identical to _log_2cosh_complex_native (stable form).
+    Backward path: catches NaN/inf in gradient at the singularity
+                   z = i·(π/2 + k·π) and replaces them with 0.
+
+    Mathematical justification:
+    - cosh(z) = 0 at z = i·(π/2 + k·π) → wavefunction ψ = 0 there
+    - VMC weights samples by |ψ|² = 0 → such sample contributes 0 to loss
+    - Therefore gradient contribution should also be 0, not NaN
+
+    Resolves Issue 5 in docs/known_issues_day2.md.
+
+    Discovered Day 4 (2026-04-30) via narrow_band_diagnostic + probe_grad_nan.
+    Fixed Day 5 Phase 2.
+    """
+
+    @staticmethod
+    def forward(ctx, z):
+        ctx.save_for_backward(z)
+        with torch.no_grad():
+            result = _log_2cosh_complex_native(z)
+        return result
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        z, = ctx.saved_tensors
+
+        with torch.enable_grad():
+            z_clone = z.detach().clone().requires_grad_(True)
+            out = _log_2cosh_complex_native(z_clone)
+            grad_z, = torch.autograd.grad(
+                out, z_clone, grad_outputs=grad_output,
+                create_graph=False, retain_graph=False,
+                allow_unused=False,
+            )
+
+        # NaN/inf detection at the singularity inner=0:
+        # PyTorch backward gives 1/inner * d(inner)/dz which is inf or NaN there.
+        # Replace with 0 (mathematically correct: |ψ|²=0 → gradient contribution=0).
+        if torch.is_complex(grad_z):
+            grad_real = grad_z.real
+            grad_imag = grad_z.imag
+            mask_real = torch.isnan(grad_real) | torch.isinf(grad_real)
+            mask_imag = torch.isnan(grad_imag) | torch.isinf(grad_imag)
+            grad_real = torch.where(mask_real, torch.zeros_like(grad_real), grad_real)
+            grad_imag = torch.where(mask_imag, torch.zeros_like(grad_imag), grad_imag)
+            grad_z = torch.complex(grad_real, grad_imag)
+        else:
+            mask = torch.isnan(grad_z) | torch.isinf(grad_z)
+            grad_z = torch.where(mask, torch.zeros_like(grad_z), grad_z)
+
+        return grad_z
+
+
+def _log_2cosh_complex(z: torch.Tensor) -> torch.Tensor:
+    """Public API: routes through _SafeLog2CoshComplex.apply for safe backward."""
+    return _SafeLog2CoshComplex.apply(z)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
