@@ -111,6 +111,8 @@ Custom autograd Function for `_log_2cosh_complex`. Forward 保持原样 (log(inn
 - experiments/probe_grad_nan.py
 - experiments/narrow_band_diagnostic.py
 
+**Resolved**: 2026-05-06, commit 166c72b (Phase 2 fix verified end-to-end in Day 5 production v2 run, NaN bug not triggered across full 3000 steps despite hitting log_2cosh singularity region; see docs/daily_log_day5.md §2.4 for verification table).
+
 
 ## Atexit dump systematic defect under SIGTERM/SIGINT during deep CUDA call
 
