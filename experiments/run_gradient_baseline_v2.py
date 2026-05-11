@@ -52,6 +52,7 @@ from core.robustness import (
     install_robustness_handlers,
     make_periodic_checkpoint_callback,
     make_anomaly_detection_callback,
+    update_capture_with_optimizer_state,
 )
 
 E_0_TRUTH = -8.4579
@@ -118,7 +119,7 @@ def main():
     print(f"Problem: 4x4 J1-J2 PBC, J2/J1=0.5, D_params={problem.dim} (RBM α=2 real params)")
 
     cfg = TCBMConfig(
-        M=12, n_steps=3000, k=20,
+        M=12, n_steps=int(os.environ.get('TCBM_N_STEPS', 3000)), k=20,
         T_min=0.005, T_max=2.0, T_min_floor=0.002,
         lambda_min=0.05, lambda_max=2.0, tau_lambda=500,
         subspace_warmup=150, subspace_update_freq=80,
@@ -149,12 +150,16 @@ def main():
     optimizer = TCBMOptimizer(problem, cfg)
 
     # Day 5 Phase 1: 3-layer robustness (Issue 6 atexit defect workaround).
-    install_robustness_handlers(_state, output_dir='results', run_name='baseline_v2_seed42')
+    run_name = os.environ.get('TCBM_RUN_NAME', 'baseline_v2_seed42')
+    install_robustness_handlers(_state, output_dir='results', run_name=run_name)
     periodic_cb = make_periodic_checkpoint_callback(_state, every_n=CHECKPOINT_EVERY)
     anomaly_cb = make_anomaly_detection_callback(_state)
 
     def combined_callback(step, info):
         progress_callback(step, info)
+        # Path δ instrumentation: capture theta + best_x at every callback fire
+        # (for Phase 2.5 R-ABORT root cause probe; periodic_cb dumps these to .pt)
+        update_capture_with_optimizer_state(_state, optimizer, step)
         periodic_cb(step, info)
         anomaly_cb(step, info)
 

@@ -6,6 +6,10 @@ Three-layer protection against atexit defect (Issue 6 in known_issues_day2.md):
 - Layer B: callback abort + immediate dump + sys.exit on anomaly
 - Layer C: SIGTERM handler dumps CPU state before exit
 
+Helper update_capture_with_optimizer_state(capture, optimizer, step, extra) 提供
+standard pattern 让 experiment scripts 把 theta + best_x + extra tensors 加进
+periodic checkpoint (Day 6 Phase 2.5 Path δ: 修 Day 5 0-.pt-files defect).
+
 Usage in experiment scripts:
     from core.robustness import (
         install_robustness_handlers,
@@ -113,6 +117,40 @@ def _dump_state(suffix: str) -> None:
         with open(json_path, 'w') as f:
             json.dump(metadata, f, indent=2, default=str)
         print(f"[{suffix}] saved metadata to {json_path}", flush=True)
+
+
+def update_capture_with_optimizer_state(
+    capture_dict: Dict[str, Any],
+    optimizer,
+    step: int,
+    extra_tensors: Optional[Dict[str, torch.Tensor]] = None,
+) -> None:
+    """
+    Update capture_dict with current optimizer tensors (theta + best_x + grad if available).
+
+    Called by experiment script's callback to ensure periodic checkpoints include tensor state.
+
+    Args:
+        capture_dict: The mutable state dict passed to install_robustness_handlers
+        optimizer: TCBMOptimizer instance with .x and .best_x attributes
+        step: Current step (for logging)
+        extra_tensors: Optional dict of additional tensors to capture
+            (e.g. {'grad_norm_history': tensor, 'log_psi_diff_max': tensor})
+    """
+    if hasattr(optimizer, 'x') and optimizer.x is not None:
+        capture_dict['theta_replicas'] = optimizer.x.detach().cpu()
+
+    if hasattr(optimizer, 'best_x') and optimizer.best_x is not None:
+        capture_dict['best_x'] = optimizer.best_x.detach().cpu()
+
+    if extra_tensors is not None:
+        for k, v in extra_tensors.items():
+            if isinstance(v, torch.Tensor):
+                capture_dict[f'extra_{k}'] = v.detach().cpu()
+            else:
+                capture_dict[f'extra_{k}'] = v
+
+    capture_dict['last_step_captured'] = step
 
 
 def make_periodic_checkpoint_callback(

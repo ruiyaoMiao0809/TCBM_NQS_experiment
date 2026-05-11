@@ -123,3 +123,37 @@ time.sleep(60)
     state_files = list(tmp_path.glob('sigterm_subprocess_signal_handler_*'))
     assert len(state_files) >= 1, \
         f"expected dump file from signal handler, got: {list(tmp_path.iterdir())}"
+
+
+def test_update_capture_with_optimizer_state_captures_tensors(tmp_path):
+    """update_capture_with_optimizer_state should add theta tensor to capture dict."""
+    from core.robustness import (
+        install_robustness_handlers,
+        update_capture_with_optimizer_state,
+        _dump_state,
+    )
+
+    state = {}  # caller's capture dict, initially empty
+    install_robustness_handlers(state, output_dir=str(tmp_path), run_name='test_theta_capture')
+
+    class MockOptimizer:
+        def __init__(self):
+            self.x = torch.randn(12, 1120)
+            self.best_x = torch.randn(1120)
+
+    opt = MockOptimizer()
+    update_capture_with_optimizer_state(state, opt, step=500)
+
+    assert 'theta_replicas' in state, "theta_replicas not captured"
+    assert state['theta_replicas'].shape == (12, 1120)
+    assert 'best_x' in state, "best_x not captured"
+    assert state['best_x'].shape == (1120,)
+    assert state['last_step_captured'] == 500
+
+    _dump_state(suffix='test_dump')
+    pt_files = list(tmp_path.glob('test_theta_capture_test_dump_state.pt'))
+    assert len(pt_files) == 1, f"expected 1 .pt file, got {len(pt_files)}"
+
+    loaded = torch.load(pt_files[0], weights_only=False)
+    assert 'theta_replicas' in loaded
+    assert loaded['theta_replicas'].shape == (12, 1120)
