@@ -132,16 +132,18 @@ def update_capture_with_optimizer_state(
 
     Args:
         capture_dict: The mutable state dict passed to install_robustness_handlers
-        optimizer: TCBMOptimizer instance with .x and .best_x attributes
+        optimizer: TCBMOptimizer instance exposing _latest_positions (M, D) and
+            _best_positions (D,) — set by optimize() right before callback fire
+            (Phase 2.5 Path κ1).
         step: Current step (for logging)
         extra_tensors: Optional dict of additional tensors to capture
             (e.g. {'grad_norm_history': tensor, 'log_psi_diff_max': tensor})
     """
-    if hasattr(optimizer, 'x') and optimizer.x is not None:
-        capture_dict['theta_replicas'] = optimizer.x.detach().cpu()
+    if hasattr(optimizer, '_latest_positions') and optimizer._latest_positions is not None:
+        capture_dict['theta_replicas'] = optimizer._latest_positions.detach().cpu()
 
-    if hasattr(optimizer, 'best_x') and optimizer.best_x is not None:
-        capture_dict['best_x'] = optimizer.best_x.detach().cpu()
+    if hasattr(optimizer, '_best_positions') and optimizer._best_positions is not None:
+        capture_dict['best_x'] = optimizer._best_positions.detach().cpu()
 
     if extra_tensors is not None:
         for k, v in extra_tensors.items():

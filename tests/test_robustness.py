@@ -125,35 +125,62 @@ time.sleep(60)
         f"expected dump file from signal handler, got: {list(tmp_path.iterdir())}"
 
 
-def test_update_capture_with_optimizer_state_captures_tensors(tmp_path):
-    """update_capture_with_optimizer_state should add theta tensor to capture dict."""
+def test_update_capture_with_real_tcbm_optimizer(tmp_path):
+    """Mini-integration: real TCBMOptimizer exposes _latest_positions / _best_positions
+    immediately before callback fire (Path κ1 fix). Helper reads them and dumps .pt with
+    actual tensors. This replaces the prior Mock-based test that silently let a
+    hasattr-mismatch slip through (bug discovered Day 6 probe-run step 500)."""
+    from core.j1j2_problem import J1J2Problem
+    from core.tcbm_optimizer_NQS import TCBMOptimizer, TCBMConfig
     from core.robustness import (
         install_robustness_handlers,
         update_capture_with_optimizer_state,
         _dump_state,
     )
 
-    state = {}  # caller's capture dict, initially empty
-    install_robustness_handlers(state, output_dir=str(tmp_path), run_name='test_theta_capture')
+    torch.manual_seed(0)
+    problem = J1J2Problem(Lx=4, Ly=4, alpha=2, J1=1.0, J2=0.5, device='cpu')
 
-    class MockOptimizer:
-        def __init__(self):
-            self.x = torch.randn(12, 1120)
-            self.best_x = torch.randn(1120)
+    cfg = TCBMConfig(
+        M=2, n_steps=2, k=2,
+        T_min=0.005, T_max=2.0, T_min_floor=0.002,
+        lambda_min=0.05, lambda_max=2.0, tau_lambda=10,
+        subspace_warmup=100, subspace_update_freq=80,
+        psi_star=1.5, min_warmup=100,
+        grad_buffer_size=10, grad_buffer_use=2,
+        subspace_source='gradient',
+        n_vmc_samples=50, n_vmc_samples_final=2,
+        noise_temperature_alpha=1.0,
+        seed=0,
+    )
+    optimizer = TCBMOptimizer(problem, cfg)
 
-    opt = MockOptimizer()
-    update_capture_with_optimizer_state(state, opt, step=500)
+    state = {}
+    install_robustness_handlers(state, output_dir=str(tmp_path), run_name='test_real_opt')
 
-    assert 'theta_replicas' in state, "theta_replicas not captured"
-    assert state['theta_replicas'].shape == (12, 1120)
-    assert 'best_x' in state, "best_x not captured"
-    assert state['best_x'].shape == (1120,)
-    assert state['last_step_captured'] == 500
+    def cb(step, info):
+        update_capture_with_optimizer_state(state, optimizer, step)
+
+    optimizer.optimize(callback=cb, callback_every=1)
+
+    assert hasattr(optimizer, '_latest_positions'), \
+        "_latest_positions attribute not set by TCBMOptimizer.optimize() — Path κ1 fix missing"
+    assert hasattr(optimizer, '_best_positions'), \
+        "_best_positions attribute not set by TCBMOptimizer.optimize() — Path κ1 fix missing"
+
+    assert 'theta_replicas' in state, \
+        "theta_replicas missing — helper didn't read _latest_positions"
+    assert state['theta_replicas'].shape == (2, problem.dim), \
+        f"theta_replicas shape mismatch: got {state['theta_replicas'].shape}, expected (2, {problem.dim})"
+    assert 'best_x' in state
+    assert state['best_x'].shape == (problem.dim,)
+    assert state['last_step_captured'] >= 0
 
     _dump_state(suffix='test_dump')
-    pt_files = list(tmp_path.glob('test_theta_capture_test_dump_state.pt'))
+    pt_files = list(tmp_path.glob('test_real_opt_test_dump_state.pt'))
     assert len(pt_files) == 1, f"expected 1 .pt file, got {len(pt_files)}"
 
     loaded = torch.load(pt_files[0], weights_only=False)
     assert 'theta_replicas' in loaded
-    assert loaded['theta_replicas'].shape == (12, 1120)
+    assert loaded['theta_replicas'].shape == (2, problem.dim)
+    assert 'best_x' in loaded

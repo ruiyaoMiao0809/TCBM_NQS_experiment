@@ -1107,6 +1107,11 @@ class TCBMOptimizer:
 
             # ── Optional progress callback (NQS-Day3) ─────────────────────
             # Read-only snapshot. Callback failures must not abort the run.
+            # Phase 2.5 Path κ1: expose latest replica/best state for callback-side
+            # capture (probe instrumentation). Surgical attribute assignment; no
+            # side effect on the optimization loop itself.
+            self._latest_positions = positions
+            self._best_positions = best_x
             if callback is not None and step % callback_every == 0:
                 try:
                     psi_max_so_far = max((p for _, p in psi_history), default=0.0)
