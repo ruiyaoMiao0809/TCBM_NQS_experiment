@@ -62,7 +62,9 @@ CALLBACK_EVERY = 100
 CHECKPOINT_EVERY = 500
 
 CHECKPOINT_PATH = Path('results/baseline_v2_checkpoint.json')
-FINAL_PATH = Path('results/baseline_v2_seed42.json')
+_DEFAULT_FINAL_NAME = 'baseline_v2_seed42.json'
+_RUN_NAME = os.environ.get('TCBM_RUN_NAME', 'baseline_v2_seed42')
+FINAL_PATH = Path(f'results/{_RUN_NAME}.json')
 
 # Module-level state shared across callback / atexit / signal handler.
 _state: Dict[str, Any] = {
@@ -87,8 +89,30 @@ def progress_callback(step: int, info: Dict[str, float]) -> None:
     _state['swap_acc_history'].append(float(info.get('swap_acc_recent', 0.0)))
 
     cost_min = float(info.get('cost_min', float('inf')))
-    if cost_min < _state['best_cost_so_far']:
-        _state['best_cost_so_far'] = cost_min
+
+    # Phase 2.5: Physical sanity gate for best_cost_raw
+    # 4x4 J1-J2 (J1=1, J2=0.5) ED ground state = E_0_TRUTH = -8.4579.
+    # Any cost < E_0_TRUTH - 1.0 = -9.4579 is physically impossible (variational
+    # bound is violated, almost certainly a 1/psi underflow numerical artifact).
+    PHYSICAL_LOWER_BOUND = E_0_TRUTH - 1.0
+    _state.setdefault('cost_history_raw', []).append(cost_min)
+    if cost_min < PHYSICAL_LOWER_BOUND:
+        if _state.get('physical_impossibility_warned_step') != step:
+            print(
+                f"  [SANITY GATE] step {step}: cost_min={cost_min:.4f} < "
+                f"{PHYSICAL_LOWER_BOUND:.4f}; not updating best (numerical "
+                f"artifact suspected)",
+                flush=True,
+            )
+            _state['physical_impossibility_warned_step'] = step
+            _state.setdefault('physical_impossibility_events', []).append({
+                'step': step,
+                'cost_min': cost_min,
+                'cost_mean': float(info.get('cost_mean', float('nan'))),
+            })
+    else:
+        if cost_min < _state['best_cost_so_far']:
+            _state['best_cost_so_far'] = cost_min
 
     psi_max = float(info.get('psi_max', 0.0))
     if psi_max > _state['psi_max']:
@@ -120,7 +144,9 @@ def main():
 
     cfg = TCBMConfig(
         M=12, n_steps=int(os.environ.get('TCBM_N_STEPS', 3000)), k=20,
-        T_min=0.005, T_max=2.0, T_min_floor=0.002,
+        T_min=float(os.environ.get('TCBM_T_MIN', 0.005)),
+        T_max=float(os.environ.get('TCBM_T_MAX', 2.0)),
+        T_min_floor=0.002,
         lambda_min=0.05, lambda_max=2.0, tau_lambda=500,
         subspace_warmup=150, subspace_update_freq=80,
         psi_star=1.5, min_warmup=120,

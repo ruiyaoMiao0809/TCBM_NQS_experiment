@@ -1,0 +1,65 @@
+{
+  "metric_1_swap_acc": {
+    "probe_n_in_target_zone": 1,
+    "probe_total": 110,
+    "probe_pct_in_target_zone": 0.00909090909090909,
+    "day5_n_in_target_zone": 1,
+    "day5_total": 300,
+    "day5_pct_in_target_zone": 0.0033333333333333335,
+    "probe_n_above_0.5": 97,
+    "day5_n_above_0.5": 281,
+    "probe_max_cliff_step": 260,
+    "probe_max_cliff_delta": 0.5454545454545454,
+    "log_per100_max_cliff_step": 800,
+    "log_per100_max_cliff_from": 0.727,
+    "log_per100_max_cliff_to": 0.364
+  },
+  "metric_2_cost_separation": {
+    "n_callbacks": 11,
+    "max_separation_step": 800,
+    "max_separation_cost_min": -10.6769,
+    "max_separation_cost_mean": -2.12575626373291,
+    "max_separation_delta": -8.55114373626709,
+    "cost_min_step_700": -3.6717,
+    "cost_min_step_800": -10.6769
+  },
+  "metric_3_sigma_e": {
+    "probe_sigma_E_max_overall": 6.304932594299316,
+    "probe_sigma_E_mean": 0.16333673064681617,
+    "probe_sigma_E_std": 0.6270388955071073,
+    "day5_sigma_E_max_overall_first_1100steps": 6.304932594299316,
+    "day5_sigma_E_mean_first_1100steps": 0.16333673064681617
+  },
+  "metric_4_psi_trajectory": {
+    "psi_max_cumulative": 1.032,
+    "psi_min_in_history": 0.0,
+    "first_step_above_1.0": 200,
+    "pct_steps_above_1.0": 0.8181818181818182,
+    "ever_reached_psi_star_1.5": false,
+    "final_psi_max_value": 1.032
+  },
+  "metric_5_bit_exact": {
+    "cost_trajectory_first_1100_max_abs_diff": 0.0,
+    "swap_trajectory_first_1100_max_abs_diff": 0.0,
+    "bit_exact_match": true,
+    "best_cost_raw_probe": -114.83650207519531,
+    "best_cost_raw_day5": -114.83650207519531,
+    "best_cost_raw_match": true
+  },
+  "hypothesis_c_verdict": {
+    "verdict": "STRONG",
+    "n_supporting_signals": 6,
+    "n_against_signals": 1,
+    "supporting": [
+      "swap_acc in [0.15, 0.35] only 0.9% (1/110)",
+      "swap_acc > 0.5 in 97/110 (88.2%) \u2014 chronically over-hot",
+      "swap_acc cliff at step 800: 0.727 \u2192 0.364 (synchronized with cost jump)",
+      "cost_min jump at step 800: -3.6717 \u2192 -10.6769 (concurrent with swap_acc cliff)",
+      "cost_min vs cost_mean separation = -8.55 at step 800 \u2014 outlier replica signature",
+      "probe-run trajectory bit-exact match Day 5 first 1100 steps \u2192 anomaly is deterministic given seed=42 + cfg, not flaky"
+    ],
+    "against": [
+      "psi_max never reached psi_star=1.5 \u2192 subspace clamping mechanism never kicked in; pure PT-Langevin regime throughout (limits Hypothesis A scenarios where subspace flip-flops would matter)"
+    ]
+  }
+}
