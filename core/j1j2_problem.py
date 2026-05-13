@@ -607,9 +607,19 @@ class J1J2Problem:
         Returns (E_mean, E_std_of_mean).
         """
         samples = self._sample_configs(theta, n_samples)
-        E_loc = self._local_energy_batch(theta, samples)    # (n_samples,) complex
-        E_mean = E_loc.mean()
-        E_std_of_mean = E_loc.std() / math.sqrt(n_samples)
+        E_loc, sample_safe = self._local_energy_batch(theta, samples)    # (n_samples,)
+
+        # Phase 2.5 Branch 1' safeguard: drop unsafe samples (ratio blowup, |Re log ratio| >= 30)
+        # before averaging. If ALL samples unsafe (extreme pathology), return NaN to
+        # signal optimizer.
+        n_safe = int(sample_safe.sum().item())
+        if n_safe == 0:
+            nan_t = torch.tensor(float('nan'), dtype=self.real_dtype, device=self.device)
+            return nan_t, nan_t
+
+        E_loc_safe = E_loc[sample_safe]
+        E_mean = E_loc_safe.mean()
+        E_std_of_mean = E_loc_safe.std() / math.sqrt(n_safe)
         # No .detach(): keep autograd graph through E_mean for partial gradient
         # via gradient(). cost_std is detached at evaluate() call site (it never
         # enters the backward path).
@@ -633,11 +643,20 @@ class J1J2Problem:
         Z = prob_unnorm.sum()
         probs = prob_unnorm / Z
 
-        E_loc = self._local_energy_batch(theta, all_sigma)           # (2^N,) complex
-        E = (probs.to(E_loc.dtype) * E_loc).sum().real
+        E_loc, sample_safe = self._local_energy_batch(theta, all_sigma)  # (2^N,)
+        # Phase 2.5 Branch 1' safeguard: zero unsafe configs from the weighted
+        # sum. In exact mode, unsafe should be rare in healthy regimes; bias is
+        # negligible. NOTE: addresses Variant B/C blowup, not A/D stall.
+        safe_complex = sample_safe.to(E_loc.dtype)
+        E = (probs.to(E_loc.dtype) * E_loc * safe_complex).sum().real
         # No .detach(): keep autograd graph through θ → log_psi → probs and E_loc
         # so gradient() can backpropagate. See evaluate() docstring.
         return E
+
+    def reset_unsafe_count(self) -> None:
+        """Reset Phase 2.5 unsafe sample tracking. Call at start of each optimize() run."""
+        self._unsafe_sample_count = 0
+        self._unsafe_total_evaluated = 0
 
     # ─────────────────────────────────────────────────────────────────────
     # Internal: Local energy computation (heart of the Hamiltonian)
@@ -647,13 +666,27 @@ class J1J2Problem:
         self,
         theta: torch.Tensor,
         sigma: torch.Tensor,
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Compute E_loc(σ) for a batch of spin configurations.
 
         For Heisenberg-type Hamiltonian H = Σ_{<ij>} J_ij S_i · S_j:
             S_i · S_j = S_i^z S_j^z + (1/2)(S_i^+ S_j^- + S_i^- S_j^+)
                       = (1/4) σ_i^z σ_j^z + (1/2)(σ_i^+ σ_j^- + σ_i^- σ_j^+)
+
+        Phase 2.5 Branch 1' safeguard (Day 7)
+        --------------------------------------
+        Returns a per-sample ``sample_safe`` mask alongside E_loc. A sample is
+        marked unsafe if |Re(log ψ(σ')/ψ(σ))| ≥ UNSAFE_THRESHOLD = 15 on ANY
+        contributing bond (i.e., bond where the physics mask σ_i ≠ σ_j fires).
+        e^30 ≈ 1e13 — float32 ratio in this region typically signals 1/ψ
+        underflow numerical artifact (verified Day 7 forensic on Variants B/C).
+        Upstream callers (_evaluate_vmc, _evaluate_exact) filter unsafe samples
+        from the mean. NOTE: addresses Variant B/C catastrophic blowup pathology,
+        NOT Variant A/D stall pathology (separate root cause).
+
+        Tracking: ``self._unsafe_sample_count`` and ``self._unsafe_total_evaluated``
+        accumulate across calls; reset via ``self.reset_unsafe_count()``.
 
         Physical factor derivation (cross-check for Day 4-5 baseline)
         --------------------------------------------------------------
@@ -691,9 +724,15 @@ class J1J2Problem:
         Returns
         -------
         E_loc : (B,) complex tensor
+        sample_safe : (B,) bool tensor — True for samples passing the Phase 2.5
+            ratio safeguard on all contributing bonds. Callers should filter
+            E_loc[sample_safe] before computing means.
         """
+        UNSAFE_THRESHOLD = 15.0  # Phase 2.5 Option X: tightened from 30 (forensic showed healthy A/D max|x|≈12, ~3x margin to 15)
+
         B = sigma.shape[0]
         E_loc = torch.zeros(B, dtype=self.complex_dtype, device=self.device)
+        sample_safe = torch.ones(B, dtype=torch.bool, device=self.device)
 
         log_psi_cur = log_psi_rbm(theta, sigma, self.N, self.M)   # (B,) complex
 
@@ -725,7 +764,16 @@ class J1J2Problem:
                     sigma_flipped[:, j] = -sj
                     log_psi_flipped = log_psi_rbm(
                         theta, sigma_flipped, self.N, self.M)
-                    ratio = torch.exp(log_psi_flipped - log_psi_cur)    # (B,) complex
+                    log_psi_diff = log_psi_flipped - log_psi_cur    # (B,) complex
+
+                    # Phase 2.5 safeguard: a sample is unsafe if its ratio on
+                    # this contributing bond has |Re(log ratio)| >= 30 (e^30 ≈ 1e13).
+                    # Only checked where physics mask fires (mask=True), since
+                    # bonds where mask=False don't contribute to E_loc anyway.
+                    bond_unsafe = (log_psi_diff.real.abs() >= UNSAFE_THRESHOLD) & mask
+                    sample_safe = sample_safe & ~bond_unsafe
+
+                    ratio = torch.exp(log_psi_diff)    # (B,) complex
                     # Factor 1/2 from (1/2)(S^+ S^- + S^- S^+): for spin-1/2,
                     # S^+|↓⟩ = |↑⟩, S^-|↑⟩ = |↓⟩, so S_i^+ S_j^- |↓↑⟩ = |↑↓⟩
                     # coefficient is 1 (not 1/2). Combined with 1/2 in front:
@@ -734,7 +782,15 @@ class J1J2Problem:
                     off_diag_contrib = J * 0.5 * ratio
                     E_loc = E_loc + off_diag_contrib * mask.to(self.complex_dtype)
 
-        return E_loc
+        # Tracking: accumulate unsafe count across calls
+        n_unsafe_this_call = int((~sample_safe).sum().item())
+        if not hasattr(self, '_unsafe_sample_count'):
+            self._unsafe_sample_count = 0
+            self._unsafe_total_evaluated = 0
+        self._unsafe_sample_count += n_unsafe_this_call
+        self._unsafe_total_evaluated += B
+
+        return E_loc, sample_safe
 
 
 # ─────────────────────────────────────────────────────────────────────────────

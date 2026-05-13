@@ -1,0 +1,35 @@
+=== Loading results/sweep_v_a_day6_seed42_checkpoint_step500_state.pt (healthy starting state) ===
+  shape: (12, 1120), dtype: torch.float32
+  device target: cuda:0
+=== Patching _init_replicas to inject all 12 saved replicas ===
+=== Running 100 short steps with threshold=15 ===
+  step   0: cost_min=-2.7686, cost_mean=-0.9554, swap_acc=0.364, unsafe=993/96000 (1.03%)
+  step  10: cost_min=-2.7686, cost_mean=-0.9554, swap_acc=0.364, unsafe=6815/576000 (1.18%)
+  step  20: cost_min=-2.7686, cost_mean=-0.9554, swap_acc=0.364, unsafe=11618/1056000 (1.10%)
+  step  30: cost_min=-2.7686, cost_mean=-0.9554, swap_acc=0.455, unsafe=17564/1536000 (1.14%)
+  step  40: cost_min=-2.7686, cost_mean=-0.9554, swap_acc=0.455, unsafe=23210/2016000 (1.15%)
+  step  50: cost_min=-2.7686, cost_mean=-0.9554, swap_acc=0.455, unsafe=29524/2496000 (1.18%)
+  step  60: cost_min=-2.7686, cost_mean=-0.9554, swap_acc=0.455, unsafe=35228/2976000 (1.18%)
+  step  70: cost_min=-2.7686, cost_mean=-0.9554, swap_acc=0.455, unsafe=41485/3456000 (1.20%)
+  step  80: cost_min=-2.7686, cost_mean=-0.9554, swap_acc=0.364, unsafe=47043/3936000 (1.20%)
+  step  90: cost_min=-2.7686, cost_mean=-0.9554, swap_acc=0.455, unsafe=52192/4416000 (1.18%)
+
+=== Wall time: 1803.6s (30.1 min) ===
+
+=== Verdict data (no interpretation, Nick reads) ===
+  final_step: 99
+  final_cost_min: -2.7686078548431396
+  min_cost_during_trajectory: -2.7686078548431396
+  max_cost_abs_during_trajectory: 2.7686078548431396
+  final_unsafe_count: 56897
+  final_unsafe_total: 4848000
+  final_unsafe_pct: 1.1736179867986798
+  cost_below_minus_10_at_any_step: False
+  cost_below_minus_100_at_any_step: False
+  cost_cliff_events_count: 0
+  cost_cliff_events: 0 events
+  wall_time_seconds: 1803.641479253769
+  best_cost_raw: -2.7697932720184326
+  best_cost_debiased: -2.4640042781829834
+
+Output: results/option_x_verify.json

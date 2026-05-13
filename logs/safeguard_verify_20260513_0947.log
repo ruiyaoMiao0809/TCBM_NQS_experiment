@@ -1,0 +1,26 @@
+Replica 0: n_unsafe=1000/1000 (100.0%), E_safe=nan, E_all=nan, max|E_all|=nan, max|E_safe|=nan
+Replica 1: n_unsafe=1000/1000 (100.0%), E_safe=nan, E_all=nan, max|E_all|=nan, max|E_safe|=nan
+Replica 2: n_unsafe=   4/1000 (  0.4%), E_safe=-2718864384.0000, E_all=3.0009e+10, max|E_all|=3.1254e+13, max|E_safe|=2194851364864.0000
+Replica 3: n_unsafe=  15/1000 (  1.5%), E_safe=2208559616.0000, E_all=-8.1945e+12, max|E_all|=9.6704e+15, max|E_safe|=4712403828736.0000
+Replica 4: n_unsafe=   0/1000 (  0.0%), E_safe=-13582.1143, E_all=-1.3582e+04, max|E_all|=1.2233e+07, max|E_safe|=12233076.0000
+Replica 5: n_unsafe=   0/1000 (  0.0%), E_safe=-1103483520.0000, E_all=-1.1035e+09, max|E_all|=1.0047e+12, max|E_safe|=1004653838336.0000
+Replica 6: n_unsafe=   0/1000 (  0.0%), E_safe=-404155.2188, E_all=-4.0416e+05, max|E_all|=6.8264e+08, max|E_safe|=682641600.0000
+Replica 7: n_unsafe=   6/1000 (  0.6%), E_safe=1036454400.0000, E_all=-1.1110e+09, max|E_all|=1.5296e+13, max|E_safe|=445554229248.0000
+Replica 8: n_unsafe= 120/1000 ( 12.0%), E_safe=-4964853248.0000, E_all=-5.1798e+13, max|E_all|=3.5431e+16, max|E_safe|=4629403795456.0000
+Replica 9: n_unsafe=   3/1000 (  0.3%), E_safe=-2364789760.0000, E_all=-1.9662e+11, max|E_all|=1.9426e+14, max|E_safe|=1558393782272.0000
+Replica 10: n_unsafe= 444/1000 ( 44.4%), E_safe=-42591920128.0000, E_all=2.0088e+17, max|E_all|=7.1665e+20, max|E_safe|=5228645580800.0000
+Replica 11: n_unsafe=1000/1000 (100.0%), E_safe=nan, E_all=nan, max|E_all|=nan, max|E_safe|=nan
+
+=== SUMMARY ===
+  pt_source: results/sweep_v_b_day6_seed42_checkpoint_step2000_state.pt
+  n_samples_per_replica: 1000
+  threshold: 30.0
+  n_replicas_with_unsafe_samples: 9
+  mean_pct_unsafe_per_replica: 29.933333333333334
+  E_safe_max_abs_across_replicas: 42591920128.0
+  E_all_max_abs_across_replicas: nan
+  E_safe_all_physical_lt_50: False
+  forensic_reference: variant B step2000: pct_above_30 = 20.11%, max|log_psi_diff| = 14672
+  comment: If pct_unsafe ~20% per replica matches forensic AND E_safe < 50, fix verified. addresses B/C blowup only; A/D stall is separate pathology.
+
+Saved: results/safeguard_verify.json

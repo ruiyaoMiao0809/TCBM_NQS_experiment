@@ -1,0 +1,65 @@
+
+=== Variant a: 6 files ===
+  atexit: mean=-0.006, max_abs=11.960, count>30=0 (0.00%), wall=0.2s
+  step1000: mean=0.028, max_abs=11.222, count>30=0 (0.00%), wall=0.0s
+  step1500: mean=-0.011, max_abs=10.777, count>30=0 (0.00%), wall=0.0s
+  step2000: mean=0.010, max_abs=12.053, count>30=0 (0.00%), wall=0.0s
+  step2500: mean=0.015, max_abs=11.968, count>30=0 (0.00%), wall=0.0s
+  step500: mean=-0.037, max_abs=11.500, count>30=0 (0.00%), wall=0.0s
+
+=== Variant b: 6 files ===
+  atexit: mean=0.711, max_abs=13463.875, count>30=2458 (20.48%), wall=0.0s
+  step1000: mean=-0.104, max_abs=32.895, count>30=1 (0.01%), wall=0.0s
+  step1500: mean=-0.154, max_abs=13644.207, count>30=2424 (20.20%), wall=0.0s
+  step2000: mean=-16.207, max_abs=14672.031, count>30=2413 (20.11%), wall=0.0s
+  step2500: mean=-4.446, max_abs=13240.523, count>30=2402 (20.02%), wall=0.0s
+  step500: mean=-0.032, max_abs=19.426, count>30=0 (0.00%), wall=0.0s
+
+=== Variant c: 6 files ===
+  atexit: mean=-0.627, max_abs=1484.980, count>30=945 (7.88%), wall=0.0s
+  step1000: mean=0.003, max_abs=22.752, count>30=0 (0.00%), wall=0.0s
+  step1500: mean=0.037, max_abs=21.507, count>30=0 (0.00%), wall=0.0s
+  step2000: mean=0.019, max_abs=24.168, count>30=0 (0.00%), wall=0.0s
+  step2500: mean=-0.002, max_abs=24.929, count>30=0 (0.00%), wall=0.0s
+  step500: mean=0.043, max_abs=15.618, count>30=0 (0.00%), wall=0.0s
+
+=== Variant d: 6 files ===
+  atexit: mean=-0.014, max_abs=11.793, count>30=0 (0.00%), wall=0.0s
+  step1000: mean=-0.020, max_abs=11.903, count>30=0 (0.00%), wall=0.0s
+  step1500: mean=0.013, max_abs=11.726, count>30=0 (0.00%), wall=0.0s
+  step2000: mean=0.006, max_abs=11.776, count>30=0 (0.00%), wall=0.0s
+  step2500: mean=-0.007, max_abs=15.699, count>30=0 (0.00%), wall=0.0s
+  step500: mean=0.001, max_abs=11.378, count>30=0 (0.00%), wall=0.0s
+
+=== Forensic analysis complete. Wall 0.6s. Output: results/forensic_log_psi_diff.json ===
+
+================================================================================
+SUMMARY: count of |log_psi_diff.real| > 30 per variant/checkpoint
+================================================================================
+variant    ckpt         count>30     pct>30     max|x|         mean          
+--------------------------------------------------------------------------------
+a          step500      0            0.00       11.500         -0.0374       
+a          step1000     0            0.00       11.222         0.0278        
+a          step1500     0            0.00       10.777         -0.0106       
+a          step2000     0            0.00       12.053         0.0098        
+a          step2500     0            0.00       11.968         0.0147        
+a          atexit       0            0.00       11.960         -0.0058       
+b          step500      0            0.00       19.426         -0.0316       
+b          step1000     1            0.01       32.895         -0.1045       
+b          step1500     2424         20.20      13644.207      -0.1543       
+b          step2000     2413         20.11      14672.031      -16.2069      
+b          step2500     2402         20.02      13240.523      -4.4460       
+b          atexit       2458         20.48      13463.875      0.7114        
+c          step500      0            0.00       15.618         0.0431        
+c          step1000     0            0.00       22.752         0.0031        
+c          step1500     0            0.00       21.507         0.0371        
+c          step2000     0            0.00       24.168         0.0194        
+c          step2500     0            0.00       24.929         -0.0015       
+c          atexit       945          7.88       1484.980       -0.6273       
+d          step500      0            0.00       11.378         0.0005        
+d          step1000     0            0.00       11.903         -0.0199       
+d          step1500     0            0.00       11.726         0.0133        
+d          step2000     0            0.00       11.776         0.0062        
+d          step2500     0            0.00       15.699         -0.0075       
+d          atexit       0            0.00       11.793         -0.0136       
+================================================================================

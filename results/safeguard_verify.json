@@ -1,0 +1,136 @@
+{
+  "per_replica": [
+    {
+      "replica": 0,
+      "n_safe": 0,
+      "n_unsafe": 1000,
+      "pct_unsafe": 100.0,
+      "E_mean_safe_filtered": NaN,
+      "E_mean_all_unfiltered": NaN,
+      "E_loc_max_abs_all": NaN,
+      "E_loc_max_abs_safe": NaN
+    },
+    {
+      "replica": 1,
+      "n_safe": 0,
+      "n_unsafe": 1000,
+      "pct_unsafe": 100.0,
+      "E_mean_safe_filtered": NaN,
+      "E_mean_all_unfiltered": NaN,
+      "E_loc_max_abs_all": NaN,
+      "E_loc_max_abs_safe": NaN
+    },
+    {
+      "replica": 2,
+      "n_safe": 996,
+      "n_unsafe": 4,
+      "pct_unsafe": 0.4,
+      "E_mean_safe_filtered": -2718864384.0,
+      "E_mean_all_unfiltered": 30009024512.0,
+      "E_loc_max_abs_all": 31253657026560.0,
+      "E_loc_max_abs_safe": 2194851364864.0
+    },
+    {
+      "replica": 3,
+      "n_safe": 985,
+      "n_unsafe": 15,
+      "pct_unsafe": 1.5,
+      "E_mean_safe_filtered": 2208559616.0,
+      "E_mean_all_unfiltered": -8194549088256.0,
+      "E_loc_max_abs_all": 9670375491239936.0,
+      "E_loc_max_abs_safe": 4712403828736.0
+    },
+    {
+      "replica": 4,
+      "n_safe": 1000,
+      "n_unsafe": 0,
+      "pct_unsafe": 0.0,
+      "E_mean_safe_filtered": -13582.1142578125,
+      "E_mean_all_unfiltered": -13582.1162109375,
+      "E_loc_max_abs_all": 12233076.0,
+      "E_loc_max_abs_safe": 12233076.0
+    },
+    {
+      "replica": 5,
+      "n_safe": 1000,
+      "n_unsafe": 0,
+      "pct_unsafe": 0.0,
+      "E_mean_safe_filtered": -1103483520.0,
+      "E_mean_all_unfiltered": -1103483392.0,
+      "E_loc_max_abs_all": 1004653838336.0,
+      "E_loc_max_abs_safe": 1004653838336.0
+    },
+    {
+      "replica": 6,
+      "n_safe": 1000,
+      "n_unsafe": 0,
+      "pct_unsafe": 0.0,
+      "E_mean_safe_filtered": -404155.21875,
+      "E_mean_all_unfiltered": -404155.1875,
+      "E_loc_max_abs_all": 682641600.0,
+      "E_loc_max_abs_safe": 682641600.0
+    },
+    {
+      "replica": 7,
+      "n_safe": 994,
+      "n_unsafe": 6,
+      "pct_unsafe": 0.6,
+      "E_mean_safe_filtered": 1036454400.0,
+      "E_mean_all_unfiltered": -1111017856.0,
+      "E_loc_max_abs_all": 15296340426752.0,
+      "E_loc_max_abs_safe": 445554229248.0
+    },
+    {
+      "replica": 8,
+      "n_safe": 880,
+      "n_unsafe": 120,
+      "pct_unsafe": 12.0,
+      "E_mean_safe_filtered": -4964853248.0,
+      "E_mean_all_unfiltered": -51797708242944.0,
+      "E_loc_max_abs_all": 3.543067557835571e+16,
+      "E_loc_max_abs_safe": 4629403795456.0
+    },
+    {
+      "replica": 9,
+      "n_safe": 997,
+      "n_unsafe": 3,
+      "pct_unsafe": 0.3,
+      "E_mean_safe_filtered": -2364789760.0,
+      "E_mean_all_unfiltered": -196617404416.0,
+      "E_loc_max_abs_all": 194259709853696.0,
+      "E_loc_max_abs_safe": 1558393782272.0
+    },
+    {
+      "replica": 10,
+      "n_safe": 556,
+      "n_unsafe": 444,
+      "pct_unsafe": 44.4,
+      "E_mean_safe_filtered": -42591920128.0,
+      "E_mean_all_unfiltered": 2.0088299059779994e+17,
+      "E_loc_max_abs_all": 7.16652249572677e+20,
+      "E_loc_max_abs_safe": 5228645580800.0
+    },
+    {
+      "replica": 11,
+      "n_safe": 0,
+      "n_unsafe": 1000,
+      "pct_unsafe": 100.0,
+      "E_mean_safe_filtered": NaN,
+      "E_mean_all_unfiltered": NaN,
+      "E_loc_max_abs_all": NaN,
+      "E_loc_max_abs_safe": NaN
+    }
+  ],
+  "summary": {
+    "pt_source": "results/sweep_v_b_day6_seed42_checkpoint_step2000_state.pt",
+    "n_samples_per_replica": 1000,
+    "threshold": 30.0,
+    "n_replicas_with_unsafe_samples": 9,
+    "mean_pct_unsafe_per_replica": 29.933333333333334,
+    "E_safe_max_abs_across_replicas": 42591920128.0,
+    "E_all_max_abs_across_replicas": NaN,
+    "E_safe_all_physical_lt_50": false,
+    "forensic_reference": "variant B step2000: pct_above_30 = 20.11%, max|log_psi_diff| = 14672",
+    "comment": "If pct_unsafe ~20% per replica matches forensic AND E_safe < 50, fix verified. addresses B/C blowup only; A/D stall is separate pathology."
+  }
+}
