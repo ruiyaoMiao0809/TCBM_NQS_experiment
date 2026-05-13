@@ -1,0 +1,59 @@
+Using device: cuda:3 (set TCBM_DEVICE env var to override)
+Problem: 4x4 J1-J2 PBC, J2/J1=0.5, D_params=1120 (RBM α=2 real params)
+
+Config: M=12, n_steps=1100, k=20
+  n_vmc_samples_final=2 (Day 3 reduced from 4)
+  subspace_warmup=150, freq=80
+  expected ~11 SVD updates total
+  psi_star=1.5 (T_w trigger threshold)
+
+Target: |E - -8.4579| / 8.4579 < 10%
+Abort:  > 15%
+Expected wall: 4.5-5.5h (run benchmark_per_step.py first to confirm)
+Progress prints every 100 steps
+Hard checkpoints every 500 steps to results/baseline_v2_checkpoint.json
+======================================================================
+
+[step    0] cost_min=10.9770 cost_mean=11.8056 sigma_E_max=0.0468 swap_acc=1.000 psi_max=0.000 subspace=off
+[step  100] cost_min=-1.9243 cost_mean=3.1611 sigma_E_max=0.0960 swap_acc=0.818 psi_max=0.000 subspace=off
+[step  200] cost_min=-2.0662 cost_mean=0.9472 sigma_E_max=0.0657 swap_acc=0.818 psi_max=1.009 subspace=off
+[step  300] cost_min=-2.2283 cost_mean=-0.1282 sigma_E_max=0.1385 swap_acc=0.727 psi_max=1.010 subspace=off
+[step  400] cost_min=-2.5172 cost_mean=-0.9145 sigma_E_max=0.6166 swap_acc=0.727 psi_max=1.028 subspace=off
+[step  500] cost_min=-2.6089 cost_mean=-0.9253 sigma_E_max=0.0832 swap_acc=0.455 psi_max=1.028 subspace=off
+[checkpoint_step500] saved metadata to results/baseline_v2_probe_seed42_checkpoint_step500_metadata.json
+[checkpoint] step 500 saved
+[step  600] cost_min=-3.5506 cost_mean=-1.4520 sigma_E_max=1.0328 swap_acc=0.636 psi_max=1.032 subspace=off
+[step  700] cost_min=-3.6717 cost_mean=-1.7608 sigma_E_max=1.0323 swap_acc=0.727 psi_max=1.032 subspace=off
+[step  800] cost_min=-10.6769 cost_mean=-2.1258 sigma_E_max=0.9558 swap_acc=0.364 psi_max=1.032 subspace=off
+[step  900] cost_min=-10.6769 cost_mean=-2.4530 sigma_E_max=0.8070 swap_acc=0.636 psi_max=1.032 subspace=off
+/home/dglg/miao_workplace/tcbm_nqs/core/tcbm_optimizer_NQS.py:448: UserWarning: torch.linalg.svd: During SVD computation with the selected cusolver driver, batches 0 failed to converge. A more accurate method will be used to compute the SVD as a fallback. Check doc at https://pytorch.org/docs/stable/generated/torch.linalg.svd.html (Triggered internally at ../aten/src/ATen/native/cuda/linalg/BatchLinearAlgebraLib.cpp:697.)
+  _, S, Vh = torch.linalg.svd(G_c, full_matrices=False)
+[step 1000] cost_min=-10.6769 cost_mean=-2.4530 sigma_E_max=0.8070 swap_acc=0.727 psi_max=1.032 subspace=off
+[checkpoint_step1000] saved metadata to results/baseline_v2_probe_seed42_checkpoint_step1000_metadata.json
+[checkpoint] step 1000 saved
+
+======================================================================
+Run completed in 21701.5s (361.7 min = 6.03h)
+======================================================================
+best_cost_raw       = -114.8365
+best_cost_debiased  = -0.3737
+E_0 (ED truth)      = -8.4579
+Relative error (raw)      = 1257.74%
+Relative error (debiased) = 95.58%
+
+[FAIL] P0-1.2 Verdict: TRIGGER R-ABORT-1
+
+Diagnostics:
+  swap_acceptance overall = 0.679 (target [0.15, 0.35])
+  swap_acceptance early/mid/late = 0.715 / 0.664 / 0.658
+  swap_acceptance std = 0.147
+  total swap events = 547
+  final sigma_E mean = 0.1221
+  final sigma_E max  = 0.8070
+  T_w triggered: never (psi never reached psi_star=1.5)
+  psi_history len = 12
+  psi_max cumulative = 1.0317
+  NQS-1e debiasing: WARN debiased >= raw, suspect bug
+
+Final saved: results/baseline_v2_seed42.json
+[atexit] saved metadata to results/baseline_v2_probe_seed42_atexit_metadata.json

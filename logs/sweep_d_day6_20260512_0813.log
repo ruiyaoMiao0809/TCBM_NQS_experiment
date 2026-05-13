@@ -1,0 +1,88 @@
+Using device: cuda:3 (set TCBM_DEVICE env var to override)
+Problem: 4x4 J1-J2 PBC, J2/J1=0.5, D_params=1120 (RBM α=2 real params)
+
+Config: M=12, n_steps=3000, k=20
+  n_vmc_samples_final=2 (Day 3 reduced from 4)
+  subspace_warmup=150, freq=80
+  expected ~35 SVD updates total
+  psi_star=1.5 (T_w trigger threshold)
+
+Target: |E - -8.4579| / 8.4579 < 10%
+Abort:  > 15%
+Expected wall: 4.5-5.5h (run benchmark_per_step.py first to confirm)
+Progress prints every 100 steps
+Hard checkpoints every 500 steps to results/baseline_v2_checkpoint.json
+======================================================================
+
+[step    0] cost_min=11.5636 cost_mean=11.8347 sigma_E_max=0.0324 swap_acc=1.000 psi_max=0.000 subspace=off
+[step  100] cost_min=-1.5195 cost_mean=0.2535 sigma_E_max=0.0902 swap_acc=0.727 psi_max=0.000 subspace=off
+[step  200] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.909 psi_max=1.029 subspace=off
+[step  300] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=1.000 psi_max=1.029 subspace=off
+[step  400] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.727 psi_max=1.029 subspace=off
+[step  500] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.818 psi_max=1.029 subspace=off
+[checkpoint_step500] saved tensors to results/sweep_v_d_day6_seed42_checkpoint_step500_state.pt
+[checkpoint_step500] saved metadata to results/sweep_v_d_day6_seed42_checkpoint_step500_metadata.json
+[checkpoint] step 500 saved
+[step  600] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.636 psi_max=1.032 subspace=off
+[step  700] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.818 psi_max=1.032 subspace=off
+[step  800] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=1.000 psi_max=1.040 subspace=off
+[step  900] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.909 psi_max=1.040 subspace=off
+[step 1000] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.818 psi_max=1.040 subspace=off
+[checkpoint_step1000] saved tensors to results/sweep_v_d_day6_seed42_checkpoint_step1000_state.pt
+[checkpoint_step1000] saved metadata to results/sweep_v_d_day6_seed42_checkpoint_step1000_metadata.json
+[checkpoint] step 1000 saved
+[step 1100] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.818 psi_max=1.040 subspace=off
+[step 1200] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.818 psi_max=1.040 subspace=off
+[step 1300] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.727 psi_max=1.040 subspace=off
+[step 1400] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.818 psi_max=1.040 subspace=off
+[step 1500] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.636 psi_max=1.040 subspace=off
+[checkpoint_step1500] saved tensors to results/sweep_v_d_day6_seed42_checkpoint_step1500_state.pt
+[checkpoint_step1500] saved metadata to results/sweep_v_d_day6_seed42_checkpoint_step1500_metadata.json
+[checkpoint] step 1500 saved
+[step 1600] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.636 psi_max=1.040 subspace=off
+[step 1700] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.727 psi_max=1.040 subspace=off
+[step 1800] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.818 psi_max=1.040 subspace=off
+[step 1900] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.818 psi_max=1.040 subspace=off
+[step 2000] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.909 psi_max=1.040 subspace=off
+[checkpoint_step2000] saved tensors to results/sweep_v_d_day6_seed42_checkpoint_step2000_state.pt
+[checkpoint_step2000] saved metadata to results/sweep_v_d_day6_seed42_checkpoint_step2000_metadata.json
+[checkpoint] step 2000 saved
+[step 2100] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.818 psi_max=1.040 subspace=off
+[step 2200] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.818 psi_max=1.040 subspace=off
+[step 2300] cost_min=-1.9210 cost_mean=-0.8825 sigma_E_max=0.0868 swap_acc=0.636 psi_max=1.040 subspace=off
+[step 2400] cost_min=-1.9210 cost_mean=1.1259 sigma_E_max=0.0808 swap_acc=0.818 psi_max=1.040 subspace=off
+[step 2500] cost_min=-1.9210 cost_mean=1.1259 sigma_E_max=0.0808 swap_acc=0.727 psi_max=1.040 subspace=off
+[checkpoint_step2500] saved tensors to results/sweep_v_d_day6_seed42_checkpoint_step2500_state.pt
+[checkpoint_step2500] saved metadata to results/sweep_v_d_day6_seed42_checkpoint_step2500_metadata.json
+[checkpoint] step 2500 saved
+[step 2600] cost_min=-1.9210 cost_mean=1.1259 sigma_E_max=0.0808 swap_acc=0.818 psi_max=1.040 subspace=off
+[step 2700] cost_min=-1.9210 cost_mean=1.1259 sigma_E_max=0.0808 swap_acc=0.818 psi_max=1.040 subspace=off
+[step 2800] cost_min=-1.9210 cost_mean=1.1259 sigma_E_max=0.0808 swap_acc=0.818 psi_max=1.040 subspace=off
+[step 2900] cost_min=-1.9210 cost_mean=1.1259 sigma_E_max=0.0808 swap_acc=0.818 psi_max=1.040 subspace=off
+
+======================================================================
+Run completed in 56604.2s (943.4 min = 15.72h)
+======================================================================
+best_cost_raw       = -2.3334
+best_cost_debiased  = -0.7162
+E_0 (ED truth)      = -8.4579
+Relative error (raw)      = 72.41%
+Relative error (debiased) = 91.53%
+
+[FAIL] P0-1.2 Verdict: TRIGGER R-ABORT-1
+
+Diagnostics:
+  swap_acceptance overall = 0.811 (target [0.15, 0.35])
+  swap_acceptance early/mid/late = 0.823 / 0.822 / 0.787
+  swap_acceptance std = 0.100
+  total swap events = 1786
+  final sigma_E mean = 0.0426
+  final sigma_E max  = 0.0808
+  T_w triggered: never (psi never reached psi_star=1.5)
+  psi_history len = 36
+  psi_max cumulative = 1.0396
+  NQS-1e debiasing: WARN debiased >= raw, suspect bug
+
+Final saved: results/sweep_v_d_day6_seed42.json
+[atexit] saved tensors to results/sweep_v_d_day6_seed42_atexit_state.pt
+[atexit] saved metadata to results/sweep_v_d_day6_seed42_atexit_metadata.json

@@ -1,0 +1,112 @@
+Using device: cuda:1 (set TCBM_DEVICE env var to override)
+Problem: 4x4 J1-J2 PBC, J2/J1=0.5, D_params=1120 (RBM α=2 real params)
+
+Config: M=12, n_steps=3000, k=20
+  n_vmc_samples_final=2 (Day 3 reduced from 4)
+  subspace_warmup=150, freq=80
+  expected ~35 SVD updates total
+  psi_star=1.5 (T_w trigger threshold)
+
+Target: |E - -8.4579| / 8.4579 < 10%
+Abort:  > 15%
+Expected wall: 4.5-5.5h (run benchmark_per_step.py first to confirm)
+Progress prints every 100 steps
+Hard checkpoints every 500 steps to results/baseline_v2_checkpoint.json
+======================================================================
+
+[step    0] cost_min=10.9770 cost_mean=11.7165 sigma_E_max=0.0468 swap_acc=1.000 psi_max=0.000 subspace=off
+[step  100] cost_min=-2.1383 cost_mean=0.5991 sigma_E_max=0.0939 swap_acc=0.727 psi_max=0.000 subspace=off
+[step  200] cost_min=-2.7879 cost_mean=-0.9699 sigma_E_max=0.0888 swap_acc=0.727 psi_max=1.029 subspace=off
+[step  300] cost_min=-2.4824 cost_mean=-1.2685 sigma_E_max=0.1671 swap_acc=0.909 psi_max=1.029 subspace=off
+[step  400] cost_min=-2.8451 cost_mean=-1.7947 sigma_E_max=0.3554 swap_acc=0.727 psi_max=1.030 subspace=off
+[step  500] cost_min=-3.5222 cost_mean=2.6592 sigma_E_max=52.4245 swap_acc=0.727 psi_max=1.030 subspace=off
+[checkpoint_step500] saved tensors to results/sweep_v_b_day6_seed42_checkpoint_step500_state.pt
+[checkpoint_step500] saved metadata to results/sweep_v_b_day6_seed42_checkpoint_step500_metadata.json
+[checkpoint] step 500 saved
+[step  600] cost_min=-8.7751 cost_mean=-2.5672 sigma_E_max=0.3026 swap_acc=0.818 psi_max=1.037 subspace=off
+  [SANITY GATE] step 700: cost_min=-18.1566 < -9.4579; not updating best (numerical artifact suspected)
+[step  700] cost_min=-18.1566 cost_mean=-3.6961 sigma_E_max=3.3596 swap_acc=0.818 psi_max=1.037 subspace=off
+  [SANITY GATE] step 800: cost_min=-18.1566 < -9.4579; not updating best (numerical artifact suspected)
+[step  800] cost_min=-18.1566 cost_mean=-4.0785 sigma_E_max=3.3596 swap_acc=0.909 psi_max=1.037 subspace=off
+  [SANITY GATE] step 900: cost_min=-82.1967 < -9.4579; not updating best (numerical artifact suspected)
+[step  900] cost_min=-82.1967 cost_mean=-12.0184 sigma_E_max=24.9376 swap_acc=0.818 psi_max=1.037 subspace=off
+[step 1000] cost_min=-8.7751 cost_mean=-2.9127 sigma_E_max=2.1833 swap_acc=0.636 psi_max=1.055 subspace=off
+[checkpoint_step1000] saved tensors to results/sweep_v_b_day6_seed42_checkpoint_step1000_state.pt
+[checkpoint_step1000] saved metadata to results/sweep_v_b_day6_seed42_checkpoint_step1000_metadata.json
+[checkpoint] step 1000 saved
+  [SANITY GATE] step 1100: cost_min=-229.0196 < -9.4579; not updating best (numerical artifact suspected)
+[step 1100] cost_min=-229.0196 cost_mean=34103481291767808.0000 sigma_E_max=inf swap_acc=0.545 psi_max=1.055 subspace=off
+  [SANITY GATE] step 1200: cost_min=-229.0196 < -9.4579; not updating best (numerical artifact suspected)
+[step 1200] cost_min=-229.0196 cost_mean=34103481291767808.0000 sigma_E_max=inf swap_acc=0.818 psi_max=1.055 subspace=off
+  [SANITY GATE] step 1300: cost_min=-101.1837 < -9.4579; not updating best (numerical artifact suspected)
+[step 1300] cost_min=-101.1837 cost_mean=34103481291767808.0000 sigma_E_max=inf swap_acc=0.727 psi_max=1.055 subspace=off
+  [SANITY GATE] step 1400: cost_min=-804387584.0000 < -9.4579; not updating best (numerical artifact suspected)
+[step 1400] cost_min=-804387584.0000 cost_mean=34103481291767808.0000 sigma_E_max=inf swap_acc=0.636 psi_max=1.055 subspace=off
+  [SANITY GATE] step 1500: cost_min=-60.7938 < -9.4579; not updating best (numerical artifact suspected)
+[step 1500] cost_min=-60.7938 cost_mean=70924940893372077393838080.0000 sigma_E_max=inf swap_acc=0.727 psi_max=1.172 subspace=off
+[checkpoint_step1500] saved tensors to results/sweep_v_b_day6_seed42_checkpoint_step1500_state.pt
+[checkpoint_step1500] saved metadata to results/sweep_v_b_day6_seed42_checkpoint_step1500_metadata.json
+[checkpoint] step 1500 saved
+/home/dglg/miao_workplace/tcbm_nqs/core/tcbm_optimizer_NQS.py:448: UserWarning: torch.linalg.svd: During SVD computation with the selected cusolver driver, batches 0 failed to converge. A more accurate method will be used to compute the SVD as a fallback. Check doc at https://pytorch.org/docs/stable/generated/torch.linalg.svd.html (Triggered internally at ../aten/src/ATen/native/cuda/linalg/BatchLinearAlgebraLib.cpp:697.)
+  _, S, Vh = torch.linalg.svd(G_c, full_matrices=False)
+  [SANITY GATE] step 1600: cost_min=-60.7938 < -9.4579; not updating best (numerical artifact suspected)
+[step 1600] cost_min=-60.7938 cost_mean=70924940893372077393838080.0000 sigma_E_max=inf swap_acc=0.727 psi_max=1.172 subspace=off
+  [SANITY GATE] step 1700: cost_min=-60.7938 < -9.4579; not updating best (numerical artifact suspected)
+[step 1700] cost_min=-60.7938 cost_mean=70924940893372077393838080.0000 sigma_E_max=inf swap_acc=0.636 psi_max=1.172 subspace=off
+  [SANITY GATE] step 1800: cost_min=-60.7938 < -9.4579; not updating best (numerical artifact suspected)
+[step 1800] cost_min=-60.7938 cost_mean=70924940893372077393838080.0000 sigma_E_max=inf swap_acc=0.818 psi_max=1.172 subspace=off
+  [SANITY GATE] step 1900: cost_min=-60.7938 < -9.4579; not updating best (numerical artifact suspected)
+[step 1900] cost_min=-60.7938 cost_mean=70924940893372077393838080.0000 sigma_E_max=inf swap_acc=0.818 psi_max=1.172 subspace=off
+  [SANITY GATE] step 2000: cost_min=-60.7938 < -9.4579; not updating best (numerical artifact suspected)
+[step 2000] cost_min=-60.7938 cost_mean=70924940893372077393838080.0000 sigma_E_max=inf swap_acc=0.636 psi_max=1.172 subspace=off
+[checkpoint_step2000] saved tensors to results/sweep_v_b_day6_seed42_checkpoint_step2000_state.pt
+[checkpoint_step2000] saved metadata to results/sweep_v_b_day6_seed42_checkpoint_step2000_metadata.json
+[checkpoint] step 2000 saved
+  [SANITY GATE] step 2100: cost_min=-60.7938 < -9.4579; not updating best (numerical artifact suspected)
+[step 2100] cost_min=-60.7938 cost_mean=70924940893372077393838080.0000 sigma_E_max=inf swap_acc=0.727 psi_max=1.172 subspace=off
+  [SANITY GATE] step 2200: cost_min=-60.7938 < -9.4579; not updating best (numerical artifact suspected)
+[step 2200] cost_min=-60.7938 cost_mean=70924940893372077393838080.0000 sigma_E_max=inf swap_acc=0.636 psi_max=1.172 subspace=off
+  [SANITY GATE] step 2300: cost_min=-60.7938 < -9.4579; not updating best (numerical artifact suspected)
+[step 2300] cost_min=-60.7938 cost_mean=70924940893372077393838080.0000 sigma_E_max=inf swap_acc=0.818 psi_max=1.172 subspace=off
+  [SANITY GATE] step 2400: cost_min=-60.7938 < -9.4579; not updating best (numerical artifact suspected)
+[step 2400] cost_min=-60.7938 cost_mean=70924940893372077393838080.0000 sigma_E_max=inf swap_acc=0.727 psi_max=1.172 subspace=off
+  [SANITY GATE] step 2500: cost_min=-60.7938 < -9.4579; not updating best (numerical artifact suspected)
+[step 2500] cost_min=-60.7938 cost_mean=70924940893372077393838080.0000 sigma_E_max=inf swap_acc=0.636 psi_max=1.172 subspace=off
+[checkpoint_step2500] saved tensors to results/sweep_v_b_day6_seed42_checkpoint_step2500_state.pt
+[checkpoint_step2500] saved metadata to results/sweep_v_b_day6_seed42_checkpoint_step2500_metadata.json
+[checkpoint] step 2500 saved
+  [SANITY GATE] step 2600: cost_min=-60.7938 < -9.4579; not updating best (numerical artifact suspected)
+[step 2600] cost_min=-60.7938 cost_mean=70924940893372077393838080.0000 sigma_E_max=inf swap_acc=0.636 psi_max=1.172 subspace=off
+  [SANITY GATE] step 2700: cost_min=-60.7938 < -9.4579; not updating best (numerical artifact suspected)
+[step 2700] cost_min=-60.7938 cost_mean=70924940893372077393838080.0000 sigma_E_max=inf swap_acc=0.545 psi_max=1.172 subspace=off
+  [SANITY GATE] step 2800: cost_min=-60.7938 < -9.4579; not updating best (numerical artifact suspected)
+[step 2800] cost_min=-60.7938 cost_mean=70924940893372077393838080.0000 sigma_E_max=inf swap_acc=0.727 psi_max=1.172 subspace=off
+  [SANITY GATE] step 2900: cost_min=-60.7938 < -9.4579; not updating best (numerical artifact suspected)
+[step 2900] cost_min=-60.7938 cost_mean=70924940893372077393838080.0000 sigma_E_max=inf swap_acc=0.636 psi_max=1.172 subspace=off
+
+======================================================================
+Run completed in 55518.5s (925.3 min = 15.42h)
+======================================================================
+best_cost_raw       = -804387584.0000
+best_cost_debiased  = -1.2926
+E_0 (ED truth)      = -8.4579
+Relative error (raw)      = 9510488129.94%
+Relative error (debiased) = 84.72%
+
+[FAIL] P0-1.2 Verdict: TRIGGER R-ABORT-1
+
+Diagnostics:
+  swap_acceptance overall = 0.742 (target [0.15, 0.35])
+  swap_acceptance early/mid/late = 0.783 / 0.728 / 0.714
+  swap_acceptance std = 0.118
+  total swap events = 1628
+  final sigma_E mean = inf
+  final sigma_E max  = inf
+  T_w triggered: never (psi never reached psi_star=1.5)
+  psi_history len = 36
+  psi_max cumulative = 1.1720
+  NQS-1e debiasing: WARN debiased >= raw, suspect bug
+
+Final saved: results/sweep_v_b_day6_seed42.json
+[atexit] saved tensors to results/sweep_v_b_day6_seed42_atexit_state.pt
+[atexit] saved metadata to results/sweep_v_b_day6_seed42_atexit_metadata.json
