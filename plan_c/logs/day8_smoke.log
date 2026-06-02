@@ -1,0 +1,111 @@
+WARNING:2026-06-02 08:42:56,036:jax._src.xla_bridge:852: An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
+netket 3.21.0 | jax 0.8.3 | backend cpu
+
+======================================================================
+STEP 1 — graph / Hilbert / Hamiltonian
+======================================================================
+edges by color: NN(color0)=32  NNN(color1)=32  total=64
+graph n_nodes=16  hilbert.size=16  hilbert dim(Sz=0)=12870
+STEP 1 verdict: GO
+
+======================================================================
+STEP 2 — ED cross-check (lanczos_ed)
+======================================================================
+E0_netket = -8.457923   E0_truth = -8.4579   |delta| = 2.335e-05
+E0/N = -0.528620  (Phase A: -0.5286)
+STEP 2 verdict: GO
+
+======================================================================
+STEP 3 — RBM + sampler + MCState + layout
+======================================================================
+vs.n_parameters = 560
+ravel flat: shape=(560,) dtype=complex128  -> 560 complex = 1120 real
+expected: 560 complex = 1120 real (Phase A D=1120)
+
+parameter leaves (ravel order):
+  Dense/bias                   shape=(32,)        dtype=complex128   complex_idx[0:32]
+  Dense/kernel                 shape=(16, 32)     dtype=complex128   complex_idx[32:544]
+  visible_bias                 shape=(16,)        dtype=complex128   complex_idx[544:560]
+STEP 3 verdict: GO
+layout doc written: /home/dglg/miao_workplace/tcbm_nqs/plan_c/experiments/../docs/netket_param_layout.md
+
+======================================================================
+STEP 4 — SR 200-step smoke + Mode-1 check
+======================================================================
+/home/dglg/miniconda3/envs/tcbm_nqs/lib/python3.11/site-packages/jax/_src/api_util.py:303: HolomorphicUndeclaredWarning: 
+Defaulting to `holomorphic=False`, but this might lead to increased
+computational cost or disabled features. Check if your variational
+function is holomorphic, and if so specify `holomorphic=True`as an extra
+keyword argument.
+
+To silence this warning, specify the `holomorphic=False/True` keyword
+argument.
+
+To numerically check whether your variational function is or not holomorphic
+you can use the following snippet:
+
+```python
+   vs = nk.vqs.MCState(...)
+
+   nk.utils.is_probably_holomorphic(vs._apply_fun, vs.parameters, vs.samples, vs.model_state)
+```
+
+if `nk.utils.is_probably_holomorphic` returns False, then your function is not holomorphic.
+If it returns True, it is probably holomorphic.
+
+
+-------------------------------------------------------
+For more detailed informations, visit the following link:
+	 https://netket.readthedocs.io/en/latest/api/_generated/errors/netket.errors.HolomorphicUndeclaredWarning.html
+or the list of all common errors and warnings at
+	 https://netket.readthedocs.io/en/latest/api/errors.html
+-------------------------------------------------------
+
+  return _fun(*args, **kwargs)
+  it=   0  E=+11.99503 ± 0.00205
+  it=  10  E=+11.97982 ± 0.00422
+  it=  20  E=+11.92101 ± 0.00913
+  it=  30  E=+11.62597 ± 0.02062
+  it=  40  E=+9.84139 ± 0.04860
+  it=  50  E=+2.92715 ± 0.08086
+  it=  60  E=-2.30582 ± 0.05453
+  it=  70  E=-4.03341 ± 0.03828
+  it=  80  E=-4.80475 ± 0.03318
+  it=  90  E=-5.21885 ± 0.03215
+  it= 100  E=-5.53986 ± 0.02392
+  it= 110  E=-5.77075 ± 0.02256
+  it= 120  E=-5.96611 ± 0.02003
+  it= 130  E=-6.12847 ± 0.02135
+  it= 140  E=-6.30496 ± 0.02071
+  it= 150  E=-6.46117 ± 0.02353
+  it= 160  E=-6.61520 ± 0.01975
+  it= 170  E=-6.75908 ± 0.02102
+  it= 180  E=-6.89782 ± 0.01776
+  it= 190  E=-7.02655 ± 0.01980
+  it= 199  E=-7.12664 ± 0.02136
+
+first_E=+11.99503  final_E=-7.12664  min_E=-7.12664
+descended=True  final<-5=True  MODE-1 clean (0 NaN, no E<E0)=True
+STEP 4 verdict: GO
+
+======================================================================
+STEP 5 — QGT reachability + ordering
+======================================================================
+QGT dense shape=(1120, 1120) dtype=float64
+finite=True  hermiticity_err=0.000e+00  min_eig(Hermitian part)=-4.3794319345700186e-16
+top-20 singular values:
+[30.7246 30.7246 23.0966 23.0966 17.4459 17.4459 12.7044 12.7044 11.8639
+ 11.8639  9.3959  9.3959  8.2785  8.2785  7.2133  7.2133  6.7692  6.7692
+  6.0238  6.0238]
+STEP 5 verdict: GO
+layout doc QGT section updated: /home/dglg/miao_workplace/tcbm_nqs/plan_c/experiments/../docs/netket_param_layout.md
+
+======================================================================
+ALL-GO = True
+  step1: GO
+  step2: GO
+  step3: GO
+  step4: GO
+  step5: GO
+summary written: /home/dglg/miao_workplace/tcbm_nqs/plan_c/experiments/../results/day8_smoke_summary.json
+======================================================================
