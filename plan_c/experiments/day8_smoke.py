@@ -291,17 +291,17 @@ print(f"STEP 5 verdict: {'GO' if step5_ok else 'NO-GO'}")
 qgt_dim = S.shape[0]
 qgt_matches_ravel = (qgt_dim == n_complex) or (qgt_dim == n_real)
 ordering_note = (
-    f"\n## QGT ordering (STEP 5 result)\n\n"
+    f"\n## QGT ordering (STEP 5 result) — RESOLVED (Day 8 closeout)\n\n"
     f"- QGT dense shape = `{S.shape}`, dtype = `{S.dtype}` (via QGTJacobianDense).\n"
     f"- ravel complex dim = {n_complex} (real = {n_real}); QGT dim {qgt_dim} "
     f"{'== n_real -> real-split QGT' if qgt_dim == n_real else ('== n_complex -> complex QGT' if qgt_dim == n_complex else '!! UNEXPECTED')}.\n"
-    f"- NetKet builds the Jacobian in the **same pytree leaf order as `ravel_pytree`** "
-    f"(parameter grouping matches the complex-index table above).\n"
-    f"- **OPEN / NEEDS-VERIFY before Day13**: the real-split *layout within* the 1120 "
-    f"axes — block `[Re(0:560); Im(560:1120)]` vs interleaved `[Re_i, Im_i, ...]` — is "
-    f"NOT yet confirmed. This determines the P_Im <-> QGT-axis mapping for the Day13 "
-    f"projection. (Singular values come in degenerate pairs, consistent with a "
-    f"symmetric Re/Im split but not decisive on the ordering.) Verify explicitly in Day9-13.\n"
+    f"- Real-axis layout = **BLOCK `[Re_all(0:{n_complex}); Im_all({n_complex}:{n_real})]`, "
+    f"Re first** — confirmed by `day8_qgt_axis_probe.py` (value at complex idx k -> "
+    f"real idx k for Re, k+{n_complex} for Im). Realification = nk.jax.tree_to_real "
+    f"then ravel_pytree (the QGTJacobianDense param-axis path); tree_to_real is ordered "
+    f"(Re before Im), not a plain dict.\n"
+    f"- Identical to `theta_real=[Re(flat),Im(flat)]` => **P_Im = theta_real[{n_complex}:{n_real}]**, "
+    f"QGT axis aligns 1:1 with theta_real, no conversion for Day13 projection.\n"
 )
 # Replace placeholder in doc
 with open(DOC_PATH) as f:

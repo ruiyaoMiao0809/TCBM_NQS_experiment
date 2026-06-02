@@ -38,9 +38,23 @@ Under this convention (Re block first, Im block second):
 
 This is the unambiguous P_Im definition for the theory-line T4b projection.
 
-## QGT ordering (STEP 5 result)
+## QGT ordering (STEP 5 result) — ✅ RESOLVED (Day 8 closeout)
 
 - QGT dense shape = `(1120, 1120)`, dtype = `float64` (via QGTJacobianDense).
 - ravel complex dim = 560 (real = 1120); QGT dim 1120 == n_real -> real-split QGT.
-- NetKet builds the Jacobian in the **same pytree leaf order as `ravel_pytree`** (parameter grouping matches the complex-index table above).
-- **OPEN / NEEDS-VERIFY before Day13**: the real-split *layout within* the 1120 axes — block `[Re(0:560); Im(560:1120)]` vs interleaved `[Re_i, Im_i, ...]` — is NOT yet confirmed. This determines the P_Im <-> QGT-axis mapping for the Day13 projection. (Singular values come in degenerate pairs, consistent with a symmetric Re/Im split but not decisive on the ordering.) Verify explicitly in Day9-13.
+- **Real-axis layout = BLOCK `[Re_all(0:560); Im_all(560:1120)]`, Re first** —
+  confirmed empirically (`plan_c/experiments/day8_qgt_axis_probe.py`): a value
+  `Re+Im·i` placed at complex ravel index `k` lands at real index `k` (Re) and
+  `k+560` (Im), consistently for k ∈ {0,1,32,200,543,544,559} across all 3 leaves.
+- Realification path = `nk.jax.tree_to_real(pars)` then `ravel_pytree` — the SAME
+  path QGTJacobianDense uses for its parameter axis (netket
+  `jax/_jacobian/logic.py:256`, `jacobian_dense.py:31`). NetKet's `tree_to_real` is
+  an **ordered** container (Re before Im), NOT a plain dict (which would sort
+  imag-first) — verified, not assumed.
+- **This BLOCK [Re;Im] layout is identical to the `theta_real = [Re(flat), Im(flat)]`
+  convention above** ⇒ QGT axis i aligns 1:1 with `theta_real[i]`, **no conversion
+  needed**. Day13 projection can index P_Im / Re blocks directly on the QGT axes.
+
+### Definitive P_Im index (interface for theory-line T4b / Day13 projection)
+- **P_Im (imaginary-part axes) = `theta_real[560:1120]`** (last 560, contiguous).
+- Re axes = `theta_real[0:560]`. Same indexing applies to QGT rows/cols.
